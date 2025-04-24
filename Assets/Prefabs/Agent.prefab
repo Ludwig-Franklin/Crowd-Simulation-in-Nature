@@ -100,6 +100,22 @@ MonoBehaviour:
   velocity: 0
   radius: 0
   goalPosition: {x: 0, y: 0, z: 0}
+  agentColor: {r: 1, g: 1, b: 1, a: 1}
+  fixedY: 0
+  showSightBox: 1
+  sightBoxColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
+  samplingPointColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
+  trailPointColor: {r: 0, g: 1, b: 0, a: 1}
+  closestTrailPointColor: {r: 0, g: 1, b: 1, a: 1}
+  visionLength: 10
+  fieldOfView: 120
+  visionSamples: 20
+  distanceMultiplier: 2
+  lastGoalForce: {x: 0, y: 0, z: 0}
+  lastAvoidanceForce: {x: 0, y: 0, z: 0}
+  lastPathForce: {x: 0, y: 0, z: 0}
+  lastTotalForce: {x: 0, y: 0, z: 0}
+  currentDirection: {x: 0, y: 0, z: 1}
 --- !u!136 &401238678454722720
 CapsuleCollider:
   m_ObjectHideFlags: 0
