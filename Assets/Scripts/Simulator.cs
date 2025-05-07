@@ -14,49 +14,62 @@ public class Simulator : MonoBehaviour
     }
     // -----------------------
 
-    [Header("Movement Settings")]
+    [Header("Force Settings")]
+    [Tooltip("Strength of the force pulling agents toward their goals")]
+    public float goalForceStrength = 10f;
+
+    [Tooltip("Strength of repulsion between agents")]
     public float agentRepulsionForce = 0f;
+
+    [Tooltip("Radius within which agents repel each other")]
     public float agentRepulsionRadius = 0f;
-    public float goalReachedThreshold = 0.5f;
+
+    [Header("Path Following Forces")]
+    [Tooltip("Strength of Helbing's path following force")]
+    public float pathFollowStrength = 10f;
+
+    [Tooltip("Distance factor for Helbing's method (higher values reduce effect at distance)")]
+    [Range(0f, 1f)]  // Constrain between 0 and 1
+    public float HelbingsDistanceFactor = 0.1f;
+
+    [Tooltip("Strength of vision-based path following force")]
+    public float visualPathFollowStrength = 10f;
+
+    [Tooltip("Distance factor for vision-based method (higher values reduce effect at distance)")]
+    [Range(0f, 1f)]  // Constrain between 0 and 1
+    public float VisualDistanceFactor = 0.1f;
+
+    [Header("Movement Limits")]
+    [Tooltip("Maximum speed agents can move")]
     public float agentMaxSpeed = 3f;
+
+    [Tooltip("Time for agents to adjust to desired velocity")]
     public float relaxationTime = 1f;
-    
+
+    [Tooltip("Distance at which agents are considered to have reached their goal")]
+    public float goalReachedThreshold = 0.5f;
+
+    [Header("Movement Settings")]
     [Tooltip("Select the method agents use to follow trails.")]
     public PathFollowingMethod currentPathFollowingMethod = PathFollowingMethod.HelbingsMethod; // Default method
 
-
-    [Header("Helbings Path Following Settings")]
-
-    [Tooltip("Increase this value to make agents follow paths more strongly.")]
-    public float pathFollowStrength = 10f;
-
-    [Tooltip("The further the path is from the agent, the less the path will affect the agent")]
-    public float HelbingsDistanceFactor = 0f;
-
-    [Header("Visual Path Following Settings")]
-    public float visualPathFollowStrength = 10f;
-    [Tooltip("The further the path is from the agent, the less the path will affect the agent")]
-    public float VisualDistanceFactor = 0f;
-
     [Header("Vision Sampling Settings")]
     [Tooltip("Number of arcs to sample from agent to vision range")]
-    [Range(3, 20)]
+    [Range(3, 1000)]
     public int visionArcCount = 8;
 
     [Tooltip("Number of points on the first arc (closest to agent)")]
-    [Range(3, 15)]
+    [Range(3, 500)]
     public int firstArcPointCount = 5;
 
     [Tooltip("Number of points on the last arc (farthest from agent)")]
-    [Range(5, 30)]
+    [Range(5, 1000)]
     public int lastArcPointCount = 15;
-
     
     [Header("Debug Visualization")]
     public bool showForces = false;
     public bool showSampledPoints = false; // Keep this flag
     
-
     [Header("Path Creation Settings")]
     [Tooltip("Width of the trail in pixels")]
     public float trailWidth = 6f;
@@ -66,60 +79,54 @@ public class Simulator : MonoBehaviour
 
     [Header("Trail Settings")]
     [Tooltip("Rate at which trails decay over time (1/T)")]
-    [Range(0.001f, 1f)] // Ensure it's not zero
-    public float trailRecoveryRate = 0.1f; // This is 1/T
+    [Range(0.001f, 1.0f)]
+    public float trailRecoveryRate = 0.1f; // 1/T in equation (5)
 
     [Header("Comfort Map Settings")]
     [Tooltip("Maximum comfort level a trail can reach (Gmax)")]
-    public float maxComfortLevel = 20f; // Renamed from maxComfortPasses (Gmax)
-    [Tooltip("Intensity of each footstep (I)")]
-    public float footstepIntensity = 1.0f; // Added (I)
-    public float[,] comfortMap; // Stores comfort values from 0 to Gmax
+    public float maxComfortLevel = 20f; // Gmax in equation (5)
 
-    // Color gradient for comfort visualization (adjust ranges if Gmax changes significantly)
+    [Tooltip("Intensity of each footstep (I) - between 0 and 1")]
+    [Range(0.0f, 1.0f)]
+    public float footstepIntensity = 0.5f; // I in equation (5)
+
+    // Color gradient for comfort visualization
     public Color comfortColor0 = Color.red;     // 0
     public Color comfortColor1 = Color.yellow;  // ~Gmax * 0.2
     public Color comfortColor2 = Color.green;   // ~Gmax * 0.4
     public Color comfortColor3 = Color.cyan;    // ~Gmax * 0.6
     public Color comfortColor4 = Color.blue;    // ~Gmax * 0.8
     public Color comfortColor5 = Color.magenta; // ~Gmax * 0.9
-    public Color comfortColor6 = Color.white; // Gmax
+    public Color comfortColor6 = Color.white;   // Gmax
 
+    // Comfort map data
+    public float[,] comfortMap; // Stores comfort values from 0 to Gmax
 
+    [Header("References")]
+    public AgentSpawner agentSpawner; // Changed from goalManager
+    public ComputeShader trailComputeShader;
+    public Material planeMaterial; // Add reference to the plane's material
+    
+    [Header("Texture Settings")]
+    public int textureResolution = 256;
+    public float comfortMapUpdateInterval = 5f;
+
+    // Private variables
     private Color[] trailColors;
     private bool forceTextureUpdate = false;
     private ComputeBuffer trailPositionBuffer;
     private Dictionary<Agent, int> agentLastTrailUpdateFrame = new Dictionary<Agent, int>();
     private Dictionary<Agent, List<SamplePoint>> agentSamplePoints = new Dictionary<Agent, List<SamplePoint>>();
     private Dictionary<Agent, Vector2> agentPreviousPositions = new Dictionary<Agent, Vector2>();
-
-    // Add missing variables
     private RenderTexture trailTexture;
-
     private bool[,] hasTrailMap;
-
-    [Header("References")]
-    public AgentSpawner agentSpawner; // Changed from goalManager
-    public ComputeShader trailComputeShader;
-    public Material planeMaterial; // Add reference to the plane's material
-
-    public List<Agent> agents = new List<Agent>();
-    
-    public int textureResolution = 256;
-    public Vector2 planeSize = new (0, 0);
-    private GameObject plane;
-    public float comfortMapUpdateInterval = 5f;
-
-    // Add these fields to track changed pixels
     private bool[,] changedPixels;
     private List<Vector2Int> changedPixelsList = new List<Vector2Int>();
-
-    // Add a set to track cells stepped on this frame
     private HashSet<Vector2Int> steppedCellsThisFrame = new HashSet<Vector2Int>();
-
-    [Header("Force Settings")]
-    [Tooltip("Strength of the force pulling agents toward their goals")]
-    public float goalForceStrength = 10f; // Renamed from agentDrivingForce
+    private GameObject plane;
+    private Vector2 planeSize = new Vector2(0, 0);
+    
+    public List<Agent> agents = new List<Agent>();
 
     void Awake()
     {
@@ -142,59 +149,6 @@ public class Simulator : MonoBehaviour
         trailTexture.enableRandomWrite = true; // Required for compute shader
         trailTexture.Create();
         
-        // Assign the render texture to the plane material
-        if (planeMaterial != null)
-        {
-            planeMaterial.mainTexture = trailTexture;
-        }
-        else
-        {
-            Debug.LogError("Plane material reference is missing!");
-        }
-
-        // Initialize the compute buffer for trail positions
-        InitializeTrailPositionBuffer();
-
-        if (trailComputeShader == null)
-        {
-            Debug.LogWarning("Compute shader is not assigned.");
-        }
-
-        // Initialize the comfort map
-        comfortMap = new float[textureResolution, textureResolution];
-        changedPixels = new bool[textureResolution, textureResolution];
-        for (int x = 0; x < textureResolution; x++)
-        {
-            for (int y = 0; y < textureResolution; y++)
-            {
-                comfortMap[x, y] = 0f; // Start with zero comfort
-                changedPixels[x, y] = false;
-            }
-        }
-        
-        // Initialize trail colors array
-        trailColors = new Color[textureResolution * textureResolution];
-        for (int i = 0; i < trailColors.Length; i++)
-        {
-            trailColors[i] = comfortColor0; // Start with red (zero comfort)
-        }
-
-        // Initialize compute shader resources if shader is assigned
-        if (trailComputeShader != null)
-        {
-            InitializeComputeResources();
-        }
-        else
-        {
-            Debug.Log("Trail Compute Shader not assigned. Using CPU for trail updates.");
-        }
-
-        plane = GameObject.Find("Ground");
-        planeSize = new Vector2(plane.transform.localScale.x, plane.transform.localScale.z);
-        trailTexture = new RenderTexture(textureResolution, textureResolution, 0, RenderTextureFormat.ARGB32);
-        trailTexture.enableRandomWrite = true;
-        trailTexture.Create();
-        
         // Apply the render texture to the plane material
         if (planeMaterial != null)
         {
@@ -213,6 +167,19 @@ public class Simulator : MonoBehaviour
             {
                 Debug.LogError("Could not find plane material. Please assign it in the inspector.");
             }
+        }
+
+        // Initialize the compute buffer for trail positions
+        InitializeTrailPositionBuffer();
+
+        // Initialize compute shader resources if shader is assigned
+        if (trailComputeShader != null)
+        {
+            InitializeComputeResources();
+        }
+        else
+        {
+            Debug.Log("Trail Compute Shader not assigned. Using CPU for trail updates.");
         }
     }
 
@@ -431,176 +398,102 @@ public class Simulator : MonoBehaviour
 
     private Vector3 CalculatePathForce(Agent agent)
     {
-        switch (currentPathFollowingMethod)
+        if (currentPathFollowingMethod == PathFollowingMethod.HelbingsMethod)
         {
-            case PathFollowingMethod.HelbingsMethod:
-                return CalculateHelbingsPathForce(agent);
-            case PathFollowingMethod.VisionBased:
-                // The points are stored in agentSamplePoints inside CalculateVisionPathForce
-                return CalculateVisionPathForce(agent);
-            default:
-                return Vector3.zero;
-        }
-    }
-
-    private Vector3 CalculateHelbingsPathForce(Agent agent)
-    {
-        Vector3 pathForce = Vector3.zero;
-        Vector3 agentPos = agent.transform.position;
-        
-        // Convert agent position to texture coordinates
-        Vector2 agentTexCoord = WorldToTextureCoord(agentPos);
-        int agentTexX = Mathf.RoundToInt(agentTexCoord.x);
-        int agentTexY = Mathf.RoundToInt(agentTexCoord.y);
-        
-        // Sample the entire comfort map
-        int resolution = textureResolution;
-        float maxForce = 0f;
-        
-        for (int x = 0; x < resolution; x++)
-        {
-            for (int y = 0; y < resolution; y++)
-            {
-                // Skip if there's no comfort at this position
-                if (comfortMap[x, y] <= 0f)
-                    continue;
-                    
-                // Convert texture coordinates to world position
-                Vector3 samplePos = TextureCoordToWorld(new Vector2(x, y));
-                
-                // Calculate direction and distance
-                Vector3 direction = samplePos - agentPos;
-                float distance = direction.magnitude;
-                
-                // Skip if too close (to avoid division by zero)
-                if (distance < 0.01f)
-                    continue;
-                    
-                // Normalize direction
-                direction = direction.normalized;
-                
-                // Calculate force based on Helbing's formula
-                // f~i,trail = (r - ri) / |r - ri| * exp(-|r - ri|/σ) * G(r) / (2πσ²)
-                float sigma = 1.0f + HelbingsDistanceFactor; // Adjust sigma based on distance factor
-                float distanceFactor = Mathf.Exp(-distance / sigma);
-                float comfortValue = comfortMap[x, y];
-                float forceMagnitude = distanceFactor * comfortValue / (2f * Mathf.PI * sigma * sigma);
-                
-                // Add to total force
-                pathForce += direction * forceMagnitude;
-                
-                // Track maximum force for normalization
-                maxForce = Mathf.Max(maxForce, forceMagnitude);
-            }
-        }
-        
-        // Normalize and scale the force
-        if (maxForce > 0f && pathForce.magnitude > 0.001f)
-        {
-            pathForce = pathForce.normalized * pathFollowStrength;
-        }
-        
-        return pathForce;
-    }
-
-    private Vector3 CalculateVisionPathForce(Agent agent)
-    {
-        Vector3 pathForce = Vector3.zero;
-        Vector3 agentPos = agent.transform.position;
-        
-        // Generate sample points if needed
-        List<SamplePoint> samplePoints;
-        if (!agentSamplePoints.TryGetValue(agent, out samplePoints) || samplePoints == null)
-        {
-            samplePoints = GenerateSamplePoints(agent);
-            agentSamplePoints[agent] = samplePoints;
-        }
-        
-        // Reset all points using a for loop instead of foreach
-        for (int i = 0; i < samplePoints.Count; i++)
-        {
-            SamplePoint point = samplePoints[i];
-            point.hasTrail = false;
-            point.isChosenPoint = false;
-            point.contributionWeight = 0f;
-            samplePoints[i] = point; // Assign the modified point back to the list
-        }
-        
-        // Check each sample point for comfort
-        float maxComfort = 0f;
-        SamplePoint bestPoint = new SamplePoint();
-        float totalWeight = 0f;
-        
-        for (int i = 0; i < samplePoints.Count; i++)
-        {
-            SamplePoint point = samplePoints[i];
+            // Implement Helbing's method (equation 2 from the paper)
+            Vector3 agentPos = agent.transform.position;
+            Vector3 trailForce = Vector3.zero;
+            float sigma = 5.0f; // Visibility radius parameter
             
-            // Convert world position to texture coordinates
-            Vector2 texCoord = WorldToTextureCoord(point.position);
-            int texX = Mathf.RoundToInt(texCoord.x);
-            int texY = Mathf.RoundToInt(texCoord.y);
-            
-            // Check if coordinates are valid
-            if (texX >= 0 && texX < textureResolution && 
-                texY >= 0 && texY < textureResolution)
+            // For Helbing's method, we need to sample the entire comfort map
+            // and calculate the force contribution from each cell with comfort > 0
+            for (int x = 0; x < textureResolution; x++)
             {
-                float comfort = comfortMap[texX, texY];
-                
-                // Mark points with comfort
-                if (comfort > 0f)
+                for (int y = 0; y < textureResolution; y++)
                 {
-                    point.hasTrail = true;
-                    
-                    // Calculate distance and weight
-                    float distance = Vector3.Distance(agentPos, point.position);
-                    float sigma = 1.0f + VisualDistanceFactor; // Adjust sigma based on distance factor
-                    float distanceFactor = Mathf.Exp(-distance / sigma);
-                    float weight = distanceFactor * comfort / (2f * Mathf.PI * sigma * sigma);
-                    
-                    point.contributionWeight = weight;
-                    totalWeight += weight;
-                    
-                    // Track best point for closest point method
-                    if (comfort > maxComfort)
+                    float G = comfortMap[x, y];
+                    if (G > 0.1f) // Only consider cells with significant comfort
                     {
-                        maxComfort = comfort;
-                        bestPoint = point;
+                        // Convert texture coordinates to world position
+                        Vector3 cellWorldPos = TextureCoordToWorld(new Vector2(x, y));
+                        
+                        // Calculate direction and distance
+                        Vector3 direction = cellWorldPos - agentPos;
+                        float distance = direction.magnitude;
+                        
+                        if (distance > 0.001f) // Avoid division by zero
+                        {
+                            // Calculate force contribution based on equation (2)
+                            // f_i,trail = ∫ d²r (r - r_i)/|r - r_i| * exp(-|r - r_i|/σ) * G(r)/(2πσ²)
+                            float distanceFactor = Mathf.Exp(-distance / sigma) / (2 * Mathf.PI * sigma * sigma);
+                            Vector3 forceContribution = direction.normalized * G * distanceFactor;
+                            
+                            // Apply additional distance factor if enabled (ensure it's between 0 and 1)
+                            if (HelbingsDistanceFactor > 0.001f)
+                            {
+                                // Use a normalized distance factor (0 to 1)
+                                float normalizedDistance = Mathf.Clamp01(distance / sigma);
+                                forceContribution *= (1f - normalizedDistance * HelbingsDistanceFactor);
+                            }
+                            
+                            trailForce += forceContribution;
+                        }
                     }
                 }
             }
             
-            // Update the point in the list
-            samplePoints[i] = point;
+            // Scale the trail force by the path follow strength
+            trailForce *= pathFollowStrength;
+            
+            return trailForce;
         }
-        
-        // Calculate force based on sampling method
-        if (maxComfort > 0f)
+        else // Vision-based method
         {
-            // Mark the chosen point
-            for (int i = 0; i < samplePoints.Count; i++)
+            // For vision-based method, we only sample points in the agent's field of view
+            List<SamplePoint> samplePoints = GetSamplePointsForAgent(agent);
+            if (samplePoints == null || samplePoints.Count == 0)
             {
-                SamplePoint point = samplePoints[i];
-                if (point.position == bestPoint.position)
+                return Vector3.zero;
+            }
+            
+            Vector3 trailForce = Vector3.zero;
+            Vector3 agentPos = agent.transform.position;
+            
+            // Find all points with trails
+            List<SamplePoint> trailPoints = samplePoints.FindAll(p => p.hasTrail);
+            if (trailPoints.Count == 0)
+            {
+                return Vector3.zero; // No trail points found
+            }
+            
+            // Calculate weighted sum of forces from all trail points
+            foreach (var point in trailPoints)
+            {
+                Vector3 direction = point.position - agentPos;
+                float distance = direction.magnitude;
+                
+                if (distance > 0.001f) // Avoid division by zero
                 {
-                    point.isChosenPoint = true;
-                    samplePoints[i] = point;
-                    break;
+                    // Calculate force contribution
+                    Vector3 forceContribution = direction.normalized * point.comfortValue * point.contributionWeight;
+                    
+                    // Apply distance factor if enabled (ensure it's between 0 and 1)
+                    if (VisualDistanceFactor > 0.001f)
+                    {
+                        // Use a normalized distance factor (0 to 1)
+                        float normalizedDistance = Mathf.Clamp01(distance / agent.visionLength);
+                        forceContribution *= (1f - normalizedDistance * VisualDistanceFactor);
+                    }
+                    
+                    trailForce += forceContribution;
                 }
             }
             
-            // Calculate direction to the best point
-            Vector3 direction = bestPoint.position - agentPos;
-            if (direction.magnitude > 0.001f)
-            {
-                direction.Normalize();
-                pathForce = direction * visualPathFollowStrength;
-            }
+            // Scale the trail force by the visual path follow strength
+            trailForce *= visualPathFollowStrength;
+            
+            return trailForce;
         }
-        
-        // Update the sample points list
-        agentSamplePoints[agent] = samplePoints;
-
-        return pathForce;
     }
 
     public List<SamplePoint> GetSamplePointsForAgent(Agent agent)
@@ -666,20 +559,30 @@ public class Simulator : MonoBehaviour
     // 3. TextureCoordToWorld method (inverse of WorldToTextureCoord)
     public Vector3 TextureCoordToWorld(Vector2 texCoord)
     {
-
-        // Convert from texture space to world space
-        float halfWidth = planeSize.x / 2f;
-        float halfHeight = planeSize.y / 2f;
+        // Get the plane's position and scale
+        Vector3 planeCenter = plane.transform.position;
+        Vector3 planeScale = plane.transform.localScale;
         
-        // Map from [0, textureResolution] to [-halfWidth, halfWidth]
-        float x = (texCoord.x / textureResolution) * planeSize.x - halfWidth;
-        // Map from [0, textureResolution] to [-halfHeight, halfHeight]
-        float z = (texCoord.y / textureResolution) * planeSize.y - halfHeight;
+        // Default Unity plane is 10x10 units in the XZ plane
+        float planeWidth = planeScale.x * 10f;  // X dimension
+        float planeLength = planeScale.z * 10f; // Z dimension
         
-        // Use a fixed Y value (height above the plane)
-        float y = 0.1f; // Slightly above the plane
+        // Convert from texture coordinates (0 to textureResolution-1) to normalized coordinates (0 to 1)
+        float normalizedX = texCoord.x / (textureResolution - 1);
+        float normalizedZ = texCoord.y / (textureResolution - 1);
         
-        return new Vector3(x, y, z);
+        // Flip coordinates (reverse of WorldToTextureCoord)
+        normalizedX = 1.0f - normalizedX;
+        normalizedZ = 1.0f - normalizedZ;
+        
+        // Convert to relative position (-0.5 to 0.5)
+        float relativeX = (normalizedX - 0.5f) * planeWidth;
+        float relativeZ = (normalizedZ - 0.5f) * planeLength;
+        
+        // Convert to world position
+        Vector3 worldPos = planeCenter + new Vector3(relativeX, 0, relativeZ);
+        
+        return worldPos;
     }
 
     private void InitializeComputeResources()
@@ -846,7 +749,6 @@ public class Simulator : MonoBehaviour
     private void UpdateComfortMap()
     {
         float deltaTime = Time.fixedDeltaTime;
-        float T = (trailRecoveryRate > 0.0001f) ? (1.0f / trailRecoveryRate) : float.MaxValue;
         bool anyPixelChanged = false;
         
         // Process stepped cells first (usually much fewer than the entire grid)
@@ -859,11 +761,20 @@ public class Simulator : MonoBehaviour
                 continue;
             
             float G = comfortMap[x, y];
-            float saturationFactor = (maxComfortLevel > 0.001f) ? (1.0f - G / maxComfortLevel) : 1.0f;
-            saturationFactor = Mathf.Max(0f, saturationFactor);
             
-            float newG = G + (footstepIntensity * 5.0f * saturationFactor * deltaTime);
-            newG = Mathf.Min(newG, maxComfortLevel);
+            // Implement equation (5) from the paper:
+            // ∂G(~r, t)/∂t = -G(~r, t)/T(~r) + I(~r)(1 - G(~r, t)/Gmax(~r))∑δ(~r - ~ri)
+            
+            // Calculate saturation factor: (1 - G/Gmax)
+            float saturationFactor = (maxComfortLevel > 0.001f) ? (1.0f - G / maxComfortLevel) : 0.0f;
+            saturationFactor = Mathf.Max(0f, saturationFactor); // Ensure non-negative
+            
+            // Calculate comfort increase from footsteps: I * saturationFactor
+            float comfortIncrease = footstepIntensity * saturationFactor * deltaTime;
+            
+            // Update comfort value
+            float newG = G + comfortIncrease;
+            newG = Mathf.Min(newG, maxComfortLevel); // Cap at maxComfortLevel
             
             if (Mathf.Abs(newG - G) > 0.001f)
             {
@@ -878,7 +789,7 @@ public class Simulator : MonoBehaviour
             }
         }
         
-        // Process decay less frequently (every 5 frames)
+        // Process decay less frequently (every 5 frames) for performance
         if (Time.frameCount % 5 == 0)
         {
             // Only process cells that have comfort > 0
@@ -887,9 +798,13 @@ public class Simulator : MonoBehaviour
                 for (int y = 0; y < textureResolution; y++)
                 {
                     float G = comfortMap[x, y];
-                    if (G > 0.001f && T != float.MaxValue)
+                    if (G > 0.001f)
                     {
+                        // Calculate decay: -G/T
+                        float T = (trailRecoveryRate > 0.0001f) ? (1.0f / trailRecoveryRate) : float.MaxValue;
                         float decayAmount = (G / T) * deltaTime * 5; // Multiply by 5 since we're doing it every 5 frames
+                        
+                        // Update comfort value
                         float newG = Mathf.Max(0f, G - decayAmount);
                         
                         if (Mathf.Abs(newG - G) > 0.001f)
@@ -1046,47 +961,84 @@ public class Simulator : MonoBehaviour
 
     private void UpdateAgentMovement(Agent agent)
     {
-        // Calculate goal-directed force (desire to move toward goal)
+        float deltaTime = Time.fixedDeltaTime;
+        
+        // Calculate desired direction (unit vector e in equation 1)
         Vector3 goalDirection = (agent.goalPosition - agent.transform.position).normalized;
-        Vector3 goalForce = goalDirection * goalForceStrength; // Use goalForceStrength instead
         
+        // Calculate path force
         Vector3 pathForce = CalculatePathForce(agent);
-
-        Vector3 avoidanceForce = agentRepulsionForce == 0 ? new Vector3(0,0,0) : CalculateAvoidanceForce(agent);
         
-        // Combine forces - Re-enabled other forces
-        Vector3 totalForce = goalForce + avoidanceForce + pathForce;
+        // Calculate avoidance force
+        Vector3 avoidanceForce = CalculateAvoidanceForce(agent);
+        
+        // Combine forces to get the desired direction (equation 4)
+        Vector3 combinedForce = goalDirection * goalForceStrength + pathForce + avoidanceForce;
+        Vector3 desiredDirection = combinedForce.normalized;
+        
+        // Calculate desired velocity (v0 * e in equation 1)
+        float desiredSpeed = agentMaxSpeed; // v0 in equation 1
+        Vector3 desiredVelocity = desiredDirection * desiredSpeed;
+        
+        // Current velocity
+        Vector3 currentVelocity = agent.currentDirection * agent.velocity;
+        
+        // Calculate acceleration using social force model (equation 1)
+        // f = (1/τ)(v0*e - v)
+        Vector3 socialForce = (desiredVelocity - currentVelocity) / relaxationTime;
         
         // Store forces for visualization
-        agent.lastGoalForce = goalForce;
-        agent.lastAvoidanceForce = avoidanceForce;
+        agent.lastGoalForce = goalDirection * goalForceStrength;
         agent.lastPathForce = pathForce;
-        agent.lastTotalForce = totalForce;
+        agent.lastAvoidanceForce = avoidanceForce;
+        agent.lastTotalForce = socialForce;
         
-        // Apply force to update velocity
-        Vector3 currentVelocity = agent.currentDirection * agent.velocity;
-        Vector3 acceleration = totalForce / 1f; // Assuming mass = 1
-        Vector3 newVelocity = currentVelocity + acceleration * Time.fixedDeltaTime;
+        // Apply Verlet velocity algorithm (equations 6 and 7)
+        Vector3 currentPos = agent.transform.position;
+        
+        // If this is the first update, initialize previousPosition
+        if (agent.previousPosition == Vector3.zero)
+        {
+            agent.previousPosition = currentPos - currentVelocity * deltaTime;
+        }
+        
+        // Update position using Verlet integration (equation 6)
+        // r(t+Δ) = 2r(t) - r(t-Δ) + Δ²f(t)
+        Vector3 newPos = 2 * currentPos - agent.previousPosition + socialForce * deltaTime * deltaTime;
+        
+        // Update velocity (equation 7)
+        // v(t+Δ) = (r(t+Δ) - r(t))/Δ
+        Vector3 newVelocity = (newPos - currentPos) / deltaTime;
         
         // Limit speed
         if (newVelocity.magnitude > agentMaxSpeed)
         {
             newVelocity = newVelocity.normalized * agentMaxSpeed;
+            
+            // Adjust position to match the capped velocity
+            newPos = currentPos + newVelocity * deltaTime;
         }
         
-        // Update direction
-        if (newVelocity.sqrMagnitude > 0.001f)
+        // Update agent position
+        agent.transform.position = newPos;
+        
+        // Update agent direction and velocity
+        if (newVelocity.magnitude > 0.01f)
         {
             agent.currentDirection = newVelocity.normalized;
+            agent.velocity = newVelocity.magnitude;
         }
         
-        // Move agent
-        agent.transform.position += newVelocity * Time.fixedDeltaTime;
+        // Store current position for next Verlet step
+        agent.previousPosition = currentPos;
         
-        // Keep agent at fixed Y position
-        Vector3 pos = agent.transform.position;
-        pos.y = agent.fixedY;
-        agent.transform.position = pos;
+        // Keep agent at fixed Y position if specified
+        if (agent.fixedY != 0)
+        {
+            Vector3 pos = agent.transform.position;
+            pos.y = agent.fixedY;
+            agent.transform.position = pos;
+        }
     }
 
     private void CreateTrailForAgent(Agent agent)
@@ -1178,7 +1130,19 @@ public class Simulator : MonoBehaviour
         }
     }
 
-    // Add this method to the Simulator class
+    // Add this method to initialize agent velocities
+    private void InitializeAgentVelocity(Agent agent)
+    {
+        // Set initial velocity based on the direction to the goal
+        Vector3 goalDirection = (agent.goalPosition - agent.transform.position).normalized;
+        agent.currentDirection = goalDirection;
+        agent.velocity = agentMaxSpeed * 0.5f; // Start at half max speed
+        
+        // Initialize previous position for Verlet integration
+        agent.previousPosition = agent.transform.position - agent.currentDirection * agent.velocity * Time.fixedDeltaTime;
+    }
+
+    // Call this from RegisterAgents
     public void RegisterAgents(List<Agent> newAgents)
     {
         if (newAgents == null || newAgents.Count == 0)
@@ -1196,6 +1160,9 @@ public class Simulator : MonoBehaviour
                 
                 // Initialize agent's last trail update frame
                 agentLastTrailUpdateFrame[agent] = Time.frameCount;
+                
+                // Initialize agent's velocity
+                InitializeAgentVelocity(agent);
             }
         }
         

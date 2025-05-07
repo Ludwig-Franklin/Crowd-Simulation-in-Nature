@@ -58,6 +58,8 @@ public class Agent : MonoBehaviour
     [HideInInspector]
     public List<SamplePoint> samplePoints = new List<SamplePoint>();
 
+    // Add this field to store the previous position for Verlet integration
+    [HideInInspector] public Vector3 previousPosition;
 
     void Start()
     {
@@ -67,6 +69,9 @@ public class Agent : MonoBehaviour
         {
             Debug.LogError("Simulator not found in the scene!", this);
         }
+
+        // Initialize previousPosition
+        previousPosition = transform.position;
 
         // --- Add Check for Initial Direction ---
         if (currentDirection == Vector3.zero)

@@ -987,7 +987,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   agentPrefab: {fileID: 8253824240745918904, guid: 2daf76c33f5f5c74b99888a1aeb58a7e, type: 3}
   spawnHeight: 0.5
-  amountOfAgents: 1
+  amountOfAgents: 2
   agentColors:
   - {r: 1, g: 0, b: 0, a: 1}
   - {r: 0, g: 1, b: 0, a: 1}
@@ -995,8 +995,8 @@ MonoBehaviour:
   - {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
   - {r: 1, g: 0, b: 1, a: 1}
   - {r: 0, g: 1, b: 1, a: 1}
-  visionLength: 5
-  fieldOfView: 60
+  visionLength: 18
+  fieldOfView: 180
   spawnPortals: []
   goalPortals: []
   dualPortals:
@@ -1006,8 +1006,8 @@ MonoBehaviour:
   spawnColor: {r: 0.7283019, g: 0.18001422, b: 0.6617814, a: 1}
   goalColor: {r: 0.20104665, g: 0.7056604, b: 0.22580631, a: 1}
   dualColor: {r: 0.79622644, g: 0.7900715, b: 0.2088216, a: 1}
-  maxAgents: 10
-  spawnInterval: 2
+  maxAgents: 30
+  spawnInterval: 0.5
   goalReachedDistance: 1.5
 --- !u!114 &1764469328
 MonoBehaviour:
@@ -1021,27 +1021,27 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b5ae20c8da4276e4e951d7f8ca20ae7c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  agentDrivingForce: 10
-  agentRepulsionForce: 2
+  goalForceStrength: 8
+  agentRepulsionForce: 0
   agentRepulsionRadius: 1.5
-  goalReachedThreshold: 0.5
-  agentMaxSpeed: 4
-  relaxationTime: 1
-  currentPathFollowingMethod: 1
-  pathFollowStrength: 2
+  pathFollowStrength: 5
   HelbingsDistanceFactor: 1
-  visualPathFollowStrength: 5
+  visualPathFollowStrength: 7
   VisualDistanceFactor: 1
-  visionArcCount: 12
-  firstArcPointCount: 10
-  lastArcPointCount: 30
+  agentMaxSpeed: 5
+  relaxationTime: 0.5
+  goalReachedThreshold: 0.5
+  currentPathFollowingMethod: 0
+  visionArcCount: 222
+  firstArcPointCount: 145
+  lastArcPointCount: 405
   showForces: 1
   showSampledPoints: 1
-  trailWidth: 4
-  trailUpdateIntervalFrames: 10
-  trailRecoveryRate: 0.02
-  maxComfortPasses: 10
-  comfortCurveStrength: 0.5
+  trailWidth: 5
+  trailUpdateIntervalFrames: 5
+  trailRecoveryRate: 0.001
+  maxComfortLevel: 20
+  footstepIntensity: 1
   comfortColor0: {r: 1, g: 0, b: 0, a: 1}
   comfortColor1: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
   comfortColor2: {r: 0, g: 1, b: 0, a: 1}
@@ -1052,10 +1052,9 @@ MonoBehaviour:
   agentSpawner: {fileID: 1764469324}
   trailComputeShader: {fileID: 7200000, guid: 889540169cf756d41b9d3cf8b5a80931, type: 3}
   planeMaterial: {fileID: 10303, guid: 0000000000000000f000000000000000, type: 0}
+  textureResolution: 100
+  comfortMapUpdateInterval: 5
   agents: []
-  textureResolution: 1000
-  planeSize: {x: 0, y: 0}
-  comfortMapUpdateInterval: 10
 --- !u!114 &1764469330
 MonoBehaviour:
   m_ObjectHideFlags: 0
