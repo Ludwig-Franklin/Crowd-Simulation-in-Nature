@@ -29,22 +29,22 @@ public class Simulator : MonoBehaviour
     public float pathFollowStrength = 10f;
 
     [Tooltip("Distance factor for Helbing's method (higher values reduce effect at distance)")]
-    [Range(0f, 1f)]  // Constrain between 0 and 1
-    public float HelbingsDistanceFactor = 0.1f;
+    [Range(0f, 10f)]
+    public float HelbingsDistanceFactor_sigma = 0.1f;
 
     [Tooltip("Strength of vision-based path following force")]
     public float visualPathFollowStrength = 10f;
 
-    [Tooltip("Distance factor for vision-based method (higher values reduce effect at distance)")]
-    [Range(0f, 1f)]  // Constrain between 0 and 1
-    public float VisualDistanceFactor = 0.1f;
+    [Tooltip("Distance factor for vision-based method (higher values reduce effect at distance) (sigma)")]
+    [Range(0f, 10f)]
+    public float VisualDistanceFactor_sigma = 0.1f;
 
     [Header("Movement Limits")]
     [Tooltip("Maximum speed agents can move")]
-    public float agentMaxSpeed = 3f;
+    public float agentMaxSpeed_v0 = 3f;
 
     [Tooltip("Time for agents to adjust to desired velocity")]
-    public float relaxationTime = 1f;
+    public float relaxationTime_tau = 1f;
 
     [Tooltip("Distance at which agents are considered to have reached their goal")]
     public float goalReachedThreshold = 0.5f;
@@ -78,9 +78,9 @@ public class Simulator : MonoBehaviour
     public int trailUpdateIntervalFrames = 5;
 
     [Header("Trail Settings")]
-    [Tooltip("Rate at which trails decay over time (1/T)")]
-    [Range(0.001f, 1.0f)]
-    public float trailRecoveryRate = 0.1f; // 1/T in equation (5)
+    [Tooltip("Time scale for trail decay in seconds (T in equation 5) - higher values mean slower decay")]
+    [Range(0.0f, 10.0f)]
+    public float trailRecoveryRate_T = 0.05f; // T in equation (5)
 
     [Header("Comfort Map Settings")]
     [Tooltip("Maximum comfort level a trail can reach (Gmax)")]
@@ -88,7 +88,7 @@ public class Simulator : MonoBehaviour
 
     [Tooltip("Intensity of each footstep (I) - between 0 and 1")]
     [Range(0.0f, 1.0f)]
-    public float footstepIntensity = 0.5f; // I in equation (5)
+    public float footstepIntensity_I = 0.8f; // I in equation (5)
 
     // Color gradient for comfort visualization
     public Color comfortColor0 = Color.red;     // 0
@@ -113,7 +113,7 @@ public class Simulator : MonoBehaviour
 
     // Private variables
     private Color[] trailColors;
-    private bool forceTextureUpdate = false;
+    public bool forceTextureUpdate = false;
     private ComputeBuffer trailPositionBuffer;
     private Dictionary<Agent, int> agentLastTrailUpdateFrame = new Dictionary<Agent, int>();
     private Dictionary<Agent, List<SamplePoint>> agentSamplePoints = new Dictionary<Agent, List<SamplePoint>>();
@@ -127,6 +127,9 @@ public class Simulator : MonoBehaviour
     private Vector2 planeSize = new Vector2(0, 0);
     
     public List<Agent> agents = new List<Agent>();
+
+    // Add a dictionary to track agents that should skip trail creation for one frame
+    private Dictionary<Agent, bool> skipTrailCreation = new Dictionary<Agent, bool>();
 
     void Awake()
     {
@@ -154,20 +157,7 @@ public class Simulator : MonoBehaviour
         {
             planeMaterial.mainTexture = trailTexture;
         }
-        else
-        {
-            // Try to get the material from the plane
-            Renderer planeRenderer = plane.GetComponent<Renderer>();
-            if (planeRenderer != null)
-            {
-                planeMaterial = planeRenderer.material;
-                planeMaterial.mainTexture = trailTexture;
-            }
-            else
-            {
-                Debug.LogError("Could not find plane material. Please assign it in the inspector.");
-            }
-        }
+       
 
         // Initialize the compute buffer for trail positions
         InitializeTrailPositionBuffer();
@@ -211,59 +201,45 @@ public class Simulator : MonoBehaviour
     {
         // Clear the stepped cells set at the beginning of each frame
         steppedCellsThisFrame.Clear();
+        changedPixelsList.Clear();
+        
+        // Reset changed pixels array
+        for (int x = 0; x < textureResolution; x++)
+        {
+            for (int y = 0; y < textureResolution; y++)
+            {
+                changedPixels[x, y] = false;
+            }
+        }
         
         // Get the goal reached distance
         float goalReachedDistance = agentSpawner != null ? agentSpawner.goalReachedDistance : goalReachedThreshold;
-
-        // Agent update loop
+        
+        // Update each agent
         for (int i = agents.Count - 1; i >= 0; i--)
         {
-            if (i >= agents.Count) continue;
-            
             Agent agent = agents[i];
-            if (agent == null || !agent.gameObject.activeInHierarchy)
-            {
-                if (agent == null) agents.RemoveAt(i);
-                continue;
-            }
+            if (agent == null) continue;
             
             // Check if agent has reached its goal
             float distanceToGoal = Vector3.Distance(agent.transform.position, agent.goalPosition);
             if (distanceToGoal < goalReachedDistance)
             {
-                RemoveAgent(agent);
-                Destroy(agent.gameObject);
-                continue;
+                // Let the AgentSpawner handle the agent reaching its goal
+                agentSpawner.HandleAgentReachedGoal(agent);
+                continue; // Skip to next agent since this one is being handled
+            
             }
             
             // Update agent movement
             UpdateAgentMovement(agent);
             
-            // Create trail for the agent
+            // Create trail for agent every frame
             CreateTrailForAgent(agent);
-            
-            // Update sample points if needed (less frequently)
-            if (currentPathFollowingMethod == PathFollowingMethod.VisionBased && 
-                showSampledPoints && Time.frameCount % 10 == 0)
-            {
-                agentSamplePoints[agent] = GenerateSamplePoints(agent);
-            }
         }
-
-        // Update comfort map
-        UpdateComfortMap();
         
-        // Only update visualization if there are changes
-        if (changedPixelsList.Count > 0)
-        {
-            UpdateComfortMapVisualization();
-            
-            if (forceTextureUpdate)
-            {
-                UpdatePathTexture();
-                forceTextureUpdate = false;
-            }
-        }
+        // Update the comfort map every frame
+        UpdateComfortMap();
     }
 
     private void UpdateTrail(Agent agent, int agentIndex)
@@ -299,65 +275,23 @@ public class Simulator : MonoBehaviour
 
     private void UpdatePathTexture()
     {
-        // Check if compute shader is available and supported
-        if (trailComputeShader != null && SystemInfo.supportsComputeShaders)
-        {
-            // Create a temporary Texture2D to hold the latest trail colors
-            // This texture acts as the input "ColorMap" for the compute shader
-            Texture2D colorTexture = new Texture2D(textureResolution, textureResolution, TextureFormat.RGBA32, false);
-            colorTexture.SetPixels(trailColors); // Load the calculated colors
-            colorTexture.Apply(); // Upload to GPU
-
-            // Find the kernel (main function) in the compute shader
-            int kernelHandle = trailComputeShader.FindKernel("CSMain");
-
-            // Set the textures for the compute shader
-            // Result: The RenderTexture the shader will write to
-            // ColorMap: The Texture2D containing the colors to write
-            trailComputeShader.SetTexture(kernelHandle, "Result", trailTexture);
-            trailComputeShader.SetTexture(kernelHandle, "ColorMap", colorTexture);
-            trailComputeShader.SetInt("textureResolution", textureResolution); // Pass resolution if needed by shader
-
-            // Dispatch the compute shader to run on the GPU
-            // Calculate thread groups needed to cover the whole texture
-            int threadGroupsX = Mathf.CeilToInt(textureResolution / 8.0f);
-            int threadGroupsY = Mathf.CeilToInt(textureResolution / 8.0f);
-            trailComputeShader.Dispatch(kernelHandle, threadGroupsX, threadGroupsY, 1);
-
-            // --- Crucial Step ---
-            // The compute shader has written to 'trailTexture' (RenderTexture).
-            // Now, make sure the plane's material is actually using this updated RenderTexture.
-            if (planeMaterial != null && planeMaterial.mainTexture != trailTexture)
-            {
-                 // This should ideally only happen once in Awake/Start,
-                 // but double-check here just in case.
-                 planeMaterial.mainTexture = trailTexture;
-            }
-            // If the material already uses trailTexture, the changes are automatically visible.
-            // --------------------
-
-            // Clean up the temporary Texture2D
-            Destroy(colorTexture);
-        }
-        else
-        {
-            // Fallback to CPU-based texture update if compute shader is not available
-            // This will be slower but ensures functionality.
-            Debug.LogWarning("Compute shader not available or supported. Falling back to CPU texture update.");
-            Texture2D cpuTexture = planeMaterial.mainTexture as Texture2D;
-            // Recreate texture if it doesn't exist or dimensions mismatch
-            if (cpuTexture == null || cpuTexture.width != textureResolution || cpuTexture.height != textureResolution)
-            {
-                 if(cpuTexture != null) Destroy(cpuTexture); // Destroy old one if necessary
-                 cpuTexture = new Texture2D(textureResolution, textureResolution, TextureFormat.RGBA32, false);
-                 planeMaterial.mainTexture = cpuTexture; // Assign new texture to material
-            }
-            cpuTexture.SetPixels(trailColors);
-            cpuTexture.Apply();
-        }
-
-        // Reset the flag *after* the update is done
-        // forceTextureUpdate = false; // This is now reset in FixedUpdate
+        // Create a texture and copy the color data
+        Texture2D tempTexture = new Texture2D(textureResolution, textureResolution, TextureFormat.RGBA32, false);
+        tempTexture.SetPixels(trailColors);
+        tempTexture.Apply();
+        
+        // Copy the texture to the render texture
+        RenderTexture prevRT = RenderTexture.active;
+        RenderTexture.active = trailTexture;
+        Graphics.Blit(tempTexture, trailTexture);
+        RenderTexture.active = prevRT;
+        
+        // Clean up
+        Destroy(tempTexture);
+        
+        // Reset the force update flag
+        forceTextureUpdate = false;
+       
     }
 
     private Vector3 CalculateGoalForce(Agent agent)
@@ -398,15 +332,14 @@ public class Simulator : MonoBehaviour
 
     private Vector3 CalculatePathForce(Agent agent)
     {
+        // Get the agent's position
+        Vector3 agentPos = agent.transform.position;
+        Vector3 trailForce = Vector3.zero;
+        
+        
         if (currentPathFollowingMethod == PathFollowingMethod.HelbingsMethod)
         {
-            // Implement Helbing's method (equation 2 from the paper)
-            Vector3 agentPos = agent.transform.position;
-            Vector3 trailForce = Vector3.zero;
-            float sigma = 5.0f; // Visibility radius parameter
-            
-            // For Helbing's method, we need to sample the entire comfort map
-            // and calculate the force contribution from each cell with comfort > 0
+            // Helbing's method: Sample the entire comfort map
             for (int x = 0; x < textureResolution; x++)
             {
                 for (int y = 0; y < textureResolution; y++)
@@ -417,35 +350,14 @@ public class Simulator : MonoBehaviour
                         // Convert texture coordinates to world position
                         Vector3 cellWorldPos = TextureCoordToWorld(new Vector2(x, y));
                         
-                        // Calculate direction and distance
-                        Vector3 direction = cellWorldPos - agentPos;
-                        float distance = direction.magnitude;
-                        
-                        if (distance > 0.001f) // Avoid division by zero
-                        {
-                            // Calculate force contribution based on equation (2)
-                            // f_i,trail = ∫ d²r (r - r_i)/|r - r_i| * exp(-|r - r_i|/σ) * G(r)/(2πσ²)
-                            float distanceFactor = Mathf.Exp(-distance / sigma) / (2 * Mathf.PI * sigma * sigma);
-                            Vector3 forceContribution = direction.normalized * G * distanceFactor;
-                            
-                            // Apply additional distance factor if enabled (ensure it's between 0 and 1)
-                            if (HelbingsDistanceFactor > 0.001f)
-                            {
-                                // Use a normalized distance factor (0 to 1)
-                                float normalizedDistance = Mathf.Clamp01(distance / sigma);
-                                forceContribution *= (1f - normalizedDistance * HelbingsDistanceFactor);
-                            }
-                            
-                            trailForce += forceContribution;
-                        }
+                        // Calculate force contribution from this point
+                        trailForce += CalculateForceContribution(agentPos, cellWorldPos, G, HelbingsDistanceFactor_sigma, 1.0f);
                     }
                 }
             }
             
             // Scale the trail force by the path follow strength
             trailForce *= pathFollowStrength;
-            
-            return trailForce;
         }
         else // Vision-based method
         {
@@ -455,9 +367,6 @@ public class Simulator : MonoBehaviour
             {
                 return Vector3.zero;
             }
-            
-            Vector3 trailForce = Vector3.zero;
-            Vector3 agentPos = agent.transform.position;
             
             // Find all points with trails
             List<SamplePoint> trailPoints = samplePoints.FindAll(p => p.hasTrail);
@@ -469,31 +378,38 @@ public class Simulator : MonoBehaviour
             // Calculate weighted sum of forces from all trail points
             foreach (var point in trailPoints)
             {
-                Vector3 direction = point.position - agentPos;
-                float distance = direction.magnitude;
-                
-                if (distance > 0.001f) // Avoid division by zero
-                {
-                    // Calculate force contribution
-                    Vector3 forceContribution = direction.normalized * point.comfortValue * point.contributionWeight;
-                    
-                    // Apply distance factor if enabled (ensure it's between 0 and 1)
-                    if (VisualDistanceFactor > 0.001f)
-                    {
-                        // Use a normalized distance factor (0 to 1)
-                        float normalizedDistance = Mathf.Clamp01(distance / agent.visionLength);
-                        forceContribution *= (1f - normalizedDistance * VisualDistanceFactor);
-                    }
-                    
-                    trailForce += forceContribution;
-                }
+                // Calculate force contribution from this sample point
+                trailForce += CalculateForceContribution(
+                    agentPos, 
+                    point.position, 
+                    point.comfortValue, 
+                    VisualDistanceFactor_sigma, 
+                    point.contributionWeight);
             }
             
             // Scale the trail force by the visual path follow strength
             trailForce *= visualPathFollowStrength;
-            
-            return trailForce;
         }
+        
+        return trailForce;
+    }
+
+    // Helper method to calculate force contribution from a single point
+    private Vector3 CalculateForceContribution(Vector3 agentPos, Vector3 pointPos, float comfortValue, float sigma, float weight)
+    {
+        // Calculate direction and distance
+        Vector3 direction = pointPos - agentPos;
+        float distance = direction.magnitude;
+        
+        if (distance <= 0.001f) // Avoid division by zero
+            return Vector3.zero;
+        
+        // Calculate force contribution based on equation (2)
+        // f_i,trail = ∫ d²r (r - r_i)/|r - r_i| * exp(-|r - r_i|/σ) * G(r)/(2πσ²)
+        float distanceFactor = Mathf.Exp(-distance / sigma) / (2 * Mathf.PI * sigma * sigma);
+        Vector3 forceContribution = direction.normalized * comfortValue * distanceFactor * weight;
+        
+        return forceContribution;
     }
 
     public List<SamplePoint> GetSamplePointsForAgent(Agent agent)
@@ -514,15 +430,15 @@ public class Simulator : MonoBehaviour
      // --- Cleanup agent data on removal ---
     public void RemoveAgent(Agent agent)
     {
-        if (agent != null)
-        {
-            agents.Remove(agent);
-            agentPreviousPositions.Remove(agent);
-            agentLastTrailUpdateFrame.Remove(agent);
-
-            // Remove sample points
-                agentSamplePoints.Remove(agent);
-        }
+        if (agent == null) return;
+        
+        // Remove from our list
+        agents.Remove(agent);
+        
+        // Clean up any dictionaries that reference this agent
+        agentLastTrailUpdateFrame.Remove(agent);
+        agentSamplePoints.Remove(agent);
+        agentPreviousPositions.Remove(agent);
     }
     // -----------------------------------
     // 2. WorldToTextureCoord method
@@ -701,55 +617,49 @@ public class Simulator : MonoBehaviour
 
     private void UpdateComfortMapVisualization()
     {
-        if (changedPixelsList.Count == 0)
-            return;
-        
-        int resolution = textureResolution;
-
-        foreach (Vector2Int pixelCoord in changedPixelsList)
+        // Only update pixels that have changed
+        foreach (Vector2Int pixel in changedPixelsList)
         {
-            int x = pixelCoord.x;
-            int y = pixelCoord.y;
-
-            if (x < 0 || x >= resolution || y < 0 || y >= resolution) continue;
-
-                float comfort = comfortMap[x, y];
-            float comfortRatio = (maxComfortLevel > 0.001f) ? Mathf.Clamp01(comfort / maxComfortLevel) : 0f;
-                Color pixelColor;
-                
-            // Map comfort value to color gradient based on ratio
-            if (comfortRatio <= 0.01f)
+            int x = pixel.x;
+            int y = pixel.y;
+            
+            // Get the comfort value
+            float G = comfortMap[x, y];
+            
+            // Map comfort value to color
+            Color pixelColor;
+            float normalizedG = G / maxComfortLevel;
+            
+            if (normalizedG <= 0.001f)
                 pixelColor = comfortColor0;
-            else if (comfortRatio < 0.2f)
-                pixelColor = Color.Lerp(comfortColor0, comfortColor1, comfortRatio / 0.2f);
-            else if (comfortRatio < 0.4f)
-                pixelColor = Color.Lerp(comfortColor1, comfortColor2, (comfortRatio - 0.2f) / 0.2f);
-            else if (comfortRatio < 0.6f)
-                pixelColor = Color.Lerp(comfortColor2, comfortColor3, (comfortRatio - 0.4f) / 0.2f);
-            else if (comfortRatio < 0.8f)
-                pixelColor = Color.Lerp(comfortColor3, comfortColor4, (comfortRatio - 0.6f) / 0.2f);
-            else if (comfortRatio < 0.95f)
-                pixelColor = Color.Lerp(comfortColor4, comfortColor5, (comfortRatio - 0.8f) / 0.15f);
+            else if (normalizedG < 0.2f)
+                pixelColor = Color.Lerp(comfortColor0, comfortColor1, normalizedG / 0.2f);
+            else if (normalizedG < 0.4f)
+                pixelColor = Color.Lerp(comfortColor1, comfortColor2, (normalizedG - 0.2f) / 0.2f);
+            else if (normalizedG < 0.6f)
+                pixelColor = Color.Lerp(comfortColor2, comfortColor3, (normalizedG - 0.4f) / 0.2f);
+            else if (normalizedG < 0.8f)
+                pixelColor = Color.Lerp(comfortColor3, comfortColor4, (normalizedG - 0.6f) / 0.2f);
+            else if (normalizedG < 0.9f)
+                pixelColor = Color.Lerp(comfortColor4, comfortColor5, (normalizedG - 0.8f) / 0.1f);
             else
-                pixelColor = Color.Lerp(comfortColor5, comfortColor6, (comfortRatio - 0.95f) / 0.05f);
-
-            int directIndex = y * resolution + x;
-            if (directIndex >= 0 && directIndex < trailColors.Length)
+                pixelColor = Color.Lerp(comfortColor5, comfortColor6, (normalizedG - 0.9f) / 0.1f);
+            
+            // Update the color in the array
+            int index = y * textureResolution + x;
+            if (index >= 0 && index < trailColors.Length)
             {
-                trailColors[directIndex] = pixelColor;
+                trailColors[index] = pixelColor;
             }
-
-            changedPixels[x, y] = false;
         }
-
-        changedPixelsList.Clear();
-        forceTextureUpdate = true;
+        
+        // Reset the changed pixels list after updating
+        changedPixels = new bool[textureResolution, textureResolution];
     }
 
     private void UpdateComfortMap()
     {
         float deltaTime = Time.fixedDeltaTime;
-        bool anyPixelChanged = false;
         
         // Process stepped cells first (usually much fewer than the entire grid)
         foreach (Vector2Int cell in steppedCellsThisFrame)
@@ -770,7 +680,8 @@ public class Simulator : MonoBehaviour
             saturationFactor = Mathf.Max(0f, saturationFactor); // Ensure non-negative
             
             // Calculate comfort increase from footsteps: I * saturationFactor
-            float comfortIncrease = footstepIntensity * saturationFactor * deltaTime;
+            // The sum of delta functions is implicitly 1 here since we're only processing cells with footsteps
+            float comfortIncrease = footstepIntensity_I * saturationFactor;
             
             // Update comfort value
             float newG = G + comfortIncrease;
@@ -779,8 +690,7 @@ public class Simulator : MonoBehaviour
             if (Mathf.Abs(newG - G) > 0.001f)
             {
                 comfortMap[x, y] = newG;
-                anyPixelChanged = true;
-                
+                // Mark as changed for visualization update
                 if (!changedPixels[x, y])
                 {
                     changedPixels[x, y] = true;
@@ -789,43 +699,40 @@ public class Simulator : MonoBehaviour
             }
         }
         
-        // Process decay less frequently (every 5 frames) for performance
-        if (Time.frameCount % 5 == 0)
+        // Process decay for ALL cells every frame
+        for (int x = 0; x < textureResolution; x++)
         {
-            // Only process cells that have comfort > 0
-            for (int x = 0; x < textureResolution; x++)
+            for (int y = 0; y < textureResolution; y++)
             {
-                for (int y = 0; y < textureResolution; y++)
+                float G = comfortMap[x, y];
+                if (G > 0.001f)
                 {
-                    float G = comfortMap[x, y];
-                    if (G > 0.001f)
+                    // Calculate decay: -G/T
+                    float decayAmount = (G / trailRecoveryRate_T) * deltaTime;
+                    
+                    // Update comfort value
+                    float newG = Mathf.Max(0f, G - decayAmount);
+                    
+                    if (Mathf.Abs(newG - G) > 0.001f)
                     {
-                        // Calculate decay: -G/T
-                        float T = (trailRecoveryRate > 0.0001f) ? (1.0f / trailRecoveryRate) : float.MaxValue;
-                        float decayAmount = (G / T) * deltaTime * 5; // Multiply by 5 since we're doing it every 5 frames
-                        
-                        // Update comfort value
-                        float newG = Mathf.Max(0f, G - decayAmount);
-                        
-                        if (Mathf.Abs(newG - G) > 0.001f)
+                        comfortMap[x, y] = newG;
+                        // Mark as changed for visualization update
+                        if (!changedPixels[x, y])
                         {
-                            comfortMap[x, y] = newG;
-                            anyPixelChanged = true;
-                            
-                            if (!changedPixels[x, y])
-                            {
-                                changedPixels[x, y] = true;
-                                changedPixelsList.Add(new Vector2Int(x, y));
-                            }
+                            changedPixels[x, y] = true;
+                            changedPixelsList.Add(new Vector2Int(x, y));
                         }
                     }
                 }
             }
         }
         
-        if (anyPixelChanged)
+        // Update visualization every frame
+        if (changedPixelsList.Count > 0)
         {
             forceTextureUpdate = true;
+            UpdateComfortMapVisualization();
+            UpdatePathTexture();
         }
     }
 
@@ -977,7 +884,7 @@ public class Simulator : MonoBehaviour
         Vector3 desiredDirection = combinedForce.normalized;
         
         // Calculate desired velocity (v0 * e in equation 1)
-        float desiredSpeed = agentMaxSpeed; // v0 in equation 1
+        float desiredSpeed = agentMaxSpeed_v0; // v0 in equation 1
         Vector3 desiredVelocity = desiredDirection * desiredSpeed;
         
         // Current velocity
@@ -985,7 +892,7 @@ public class Simulator : MonoBehaviour
         
         // Calculate acceleration using social force model (equation 1)
         // f = (1/τ)(v0*e - v)
-        Vector3 socialForce = (desiredVelocity - currentVelocity) / relaxationTime;
+        Vector3 socialForce = (desiredVelocity - currentVelocity) / relaxationTime_tau;
         
         // Store forces for visualization
         agent.lastGoalForce = goalDirection * goalForceStrength;
@@ -1011,9 +918,9 @@ public class Simulator : MonoBehaviour
         Vector3 newVelocity = (newPos - currentPos) / deltaTime;
         
         // Limit speed
-        if (newVelocity.magnitude > agentMaxSpeed)
+        if (newVelocity.magnitude > agentMaxSpeed_v0)
         {
-            newVelocity = newVelocity.normalized * agentMaxSpeed;
+            newVelocity = newVelocity.normalized * agentMaxSpeed_v0;
             
             // Adjust position to match the capped velocity
             newPos = currentPos + newVelocity * deltaTime;
@@ -1043,6 +950,13 @@ public class Simulator : MonoBehaviour
 
     private void CreateTrailForAgent(Agent agent)
     {
+        // Check if this agent should skip trail creation this frame
+        if (skipTrailCreation.TryGetValue(agent, out bool skip) && skip)
+        {
+            skipTrailCreation[agent] = false; // Reset for next frame
+            return;
+        }
+        
         // Get the agent's position but project it onto the plane (use the plane's Y position)
         Vector3 projectedPosition = agent.transform.position;
         projectedPosition.y = plane.transform.position.y; // Use the plane's Y position
@@ -1081,7 +995,7 @@ public class Simulator : MonoBehaviour
         agentPreviousPositions[agent] = texCoord;
     }
 
-    private void IncreaseComfortAt(int centerX, int centerY)
+    private void RegisterStepAt(int centerX, int centerY)
     {
         // Calculate the radius based on trailWidth
         int radius = Mathf.FloorToInt(trailWidth / 2f);
@@ -1096,6 +1010,7 @@ public class Simulator : MonoBehaviour
                 {
                     // Add to the set of cells stepped on this frame
                     steppedCellsThisFrame.Add(new Vector2Int(x, y));
+                   
                 }
             }
         }
@@ -1136,7 +1051,7 @@ public class Simulator : MonoBehaviour
         // Set initial velocity based on the direction to the goal
         Vector3 goalDirection = (agent.goalPosition - agent.transform.position).normalized;
         agent.currentDirection = goalDirection;
-        agent.velocity = agentMaxSpeed * 0.5f; // Start at half max speed
+        agent.velocity = agentMaxSpeed_v0 * 0.5f; // Start at half max speed
         
         // Initialize previous position for Verlet integration
         agent.previousPosition = agent.transform.position - agent.currentDirection * agent.velocity * Time.fixedDeltaTime;
@@ -1189,102 +1104,6 @@ public class Simulator : MonoBehaviour
         UpdateComfortMapVisualization();
         UpdatePathTexture();
     }
-
-    // This method now just registers that cells were stepped on
-    private void RegisterStepAt(int centerX, int centerY)
-    {
-        // Remove debug logs
-        int radius = Mathf.FloorToInt(trailWidth / 2f);
-
-        for (int x = centerX - radius; x <= centerX + radius; x++)
-        {
-            for (int y = centerY - radius; y <= centerY + radius; y++)
-            {
-                if (x >= 0 && x < textureResolution && y >= 0 && y < textureResolution)
-                {
-                    steppedCellsThisFrame.Add(new Vector2Int(x, y));
-                }
-            }
-        }
-    }
-
-    // Add this debug method to check the WorldToTextureCoord function
-    private void DebugWorldToTextureCoord()
-    {
-        // Only run in editor or development builds
-        #if UNITY_EDITOR || DEVELOPMENT_BUILD
-        // Test with some known world positions
-        Vector3 center = Vector3.zero;
-        Vector3 corner = new Vector3(planeSize.x/2, 0, planeSize.y/2);
-        
-        Vector2 centerTexCoord = WorldToTextureCoord(center);
-        Vector2 cornerTexCoord = WorldToTextureCoord(corner);
-        
-        Debug.Log($"World position {center} maps to texture coordinates {centerTexCoord}");
-        Debug.Log($"World position {corner} maps to texture coordinates {cornerTexCoord}");
-        
-        // Check if these coordinates are within the texture bounds
-        bool centerInBounds = centerTexCoord.x >= 0 && centerTexCoord.x < textureResolution &&
-                             centerTexCoord.y >= 0 && centerTexCoord.y < textureResolution;
-        
-        bool cornerInBounds = cornerTexCoord.x >= 0 && cornerTexCoord.x < textureResolution &&
-                             cornerTexCoord.y >= 0 && cornerTexCoord.y < textureResolution;
-        
-        Debug.Log($"Center in bounds: {centerInBounds}, Corner in bounds: {cornerInBounds}");
-        #endif
-    }
-
-    // Call this method in Start or Awake
-    void Start()
-    {
-        // ... existing code ...
-        
-        // Debug the coordinate conversion
-        DebugWorldToTextureCoord();
-
-        // Test trail creation after a short delay
-        Invoke("TestTrailCreation", 2.0f);
-    }
-
-    // Add this method to directly test trail creation
-    private void TestTrailCreation()
-    {
-        // Create a test trail in the center of the texture
-        int centerX = textureResolution / 2;
-        int centerY = textureResolution / 2;
-        
-        // Create a simple cross pattern - scale based on texture resolution
-        int lineLength = textureResolution / 10; // 10% of texture size
-        for (int i = -lineLength; i <= lineLength; i++)
-        {
-            RegisterStepAt(centerX + i, centerY);      // Horizontal line
-            RegisterStepAt(centerX, centerY + i);      // Vertical line
-        }
-        
-        // Add a circle pattern - scale based on texture resolution
-        int radius = textureResolution / 5; // 20% of texture size
-        for (float angle = 0; angle < 360; angle += 2) // More points for higher resolution
-        {
-            float rad = angle * Mathf.Deg2Rad;
-            int x = centerX + Mathf.RoundToInt(radius * Mathf.Cos(rad));
-            int y = centerY + Mathf.RoundToInt(radius * Mathf.Sin(rad));
-            
-            // Ensure coordinates are within bounds
-            if (x >= 0 && x < textureResolution && y >= 0 && y < textureResolution)
-            {
-                RegisterStepAt(x, y);
-            }
-        }
-        
-        // Force an update of the comfort map
-        UpdateComfortMap();
-        UpdateComfortMapVisualization();
-        
-        // Force texture update
-        forceTextureUpdate = true;
-        UpdatePathTexture();
-    }
-
     // Add this method to initialize the plane size
     private void InitializePlaneSize()
     {
@@ -1307,6 +1126,49 @@ public class Simulator : MonoBehaviour
         
         // Calculate the actual plane size in world units
         planeSize = new Vector2(planeScale.x * defaultPlaneSize, planeScale.z * defaultPlaneSize);
+    }
+
+    // Completely revamp this method to ensure no trail is created
+    public void ResetAgentTrailTracking(Agent agent, Vector3 newPosition)
+    {
+        if (agent == null) return;
+        
+        // First, remove the agent from all tracking dictionaries
+        agentPreviousPositions.Remove(agent);
+        agentLastTrailUpdateFrame.Remove(agent);
+        agentSamplePoints.Remove(agent);
+        
+        // Then re-add it with the new position
+        Vector2 newTexCoord = WorldToTextureCoord(newPosition);
+        agentPreviousPositions.Add(agent, newTexCoord);
+        agentLastTrailUpdateFrame.Add(agent, Time.frameCount);
+        agentSamplePoints.Add(agent, new List<SamplePoint>());
+        
+        // Force the agent's previous position to be the same as current position
+        // to prevent any velocity-based trail creation
+        agent.previousPosition = newPosition;
+        
+        // Set the skip flag for the next frame
+        skipTrailCreation[agent] = true;
+       
+    }
+
+    // Add this method to register a single agent
+    public void RegisterSingleAgent(Agent agent)
+    {
+        if (agent == null || agents.Contains(agent))
+            return;
+        
+        agents.Add(agent);
+        
+        // Initialize agent's previous position for trail creation
+        agentPreviousPositions[agent] = WorldToTextureCoord(agent.transform.position);
+        
+        // Initialize agent's last trail update frame
+        agentLastTrailUpdateFrame[agent] = Time.frameCount;
+        
+        // Initialize agent's velocity
+        InitializeAgentVelocity(agent);
     }
 }
 

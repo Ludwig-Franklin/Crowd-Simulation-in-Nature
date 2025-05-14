@@ -29,7 +29,7 @@ Transform:
   m_GameObject: {fileID: 8253824240745918904}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -2.0859854, y: -3.409525, z: -1.7675037}
+  m_LocalPosition: {x: -8.185445, y: 1.0000038, z: -5.4882317}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -63,7 +63,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 10303, guid: 0000000000000000f000000000000000, type: 0}
+  - {fileID: 2100000, guid: 5929d422c0315ec49b308369b2739e56, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -109,13 +109,18 @@ MonoBehaviour:
   closestTrailPointColor: {r: 0, g: 1, b: 1, a: 1}
   visionLength: 10
   fieldOfView: 120
-  visionSamples: 20
-  distanceMultiplier: 2
+  goalForceColor: {r: 0, g: 1, b: 0, a: 1}
+  avoidanceForceColor: {r: 1, g: 0, b: 0, a: 1}
+  pathForceColor: {r: 0, g: 0, b: 1, a: 1}
+  trailVisionForceColor: {r: 1, g: 0, b: 1, a: 1}
+  totalForceColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
+  forceScale: 1
   lastGoalForce: {x: 0, y: 0, z: 0}
   lastAvoidanceForce: {x: 0, y: 0, z: 0}
   lastPathForce: {x: 0, y: 0, z: 0}
   lastTotalForce: {x: 0, y: 0, z: 0}
   currentDirection: {x: 0, y: 0, z: 1}
+  previousPosition: {x: 0, y: 0, z: 0}
 --- !u!136 &401238678454722720
 CapsuleCollider:
   m_ObjectHideFlags: 0

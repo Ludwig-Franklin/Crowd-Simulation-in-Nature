@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -7,7 +8,8 @@ public class AgentSpawner : MonoBehaviour
     [Header("Agent Settings")]
     public GameObject agentPrefab;
     public float spawnHeight = 0.0f; // Height above portal to spawn agents
-    public int amountOfAgents = 1;
+    [Tooltip("Maximum number of agents to spawn")]
+    public int maxAgents = 20;
     
     // Pre-defined array of colors to assign
     public Color[] agentColors = new Color[] { Color.red, Color.green, Color.blue, Color.yellow, Color.magenta, Color.cyan };
@@ -30,7 +32,6 @@ public class AgentSpawner : MonoBehaviour
     public Color dualColor = Color.cyan;
     
     [Header("Agent Management")]
-    public int maxAgents = 20;
     public float spawnInterval = 2f;
     [Tooltip("Distance threshold for reaching a goal")]
     public float goalReachedDistance = 1.5f;
@@ -82,6 +83,21 @@ public class AgentSpawner : MonoBehaviour
                 }
             }
         }
+        
+        // Check agent colors periodically
+        if (Time.frameCount % 30 == 0)
+        {
+            foreach (var agent in simulator.agents)
+            {
+                if (agent != null)
+                {
+                    EnsureAgentColor(agent);
+                }
+            }
+        }
+        
+        // Check if any agents have reached their goals
+        CheckAllAgentGoals();
     }
     
     private void CheckAllAgentGoals()
@@ -98,17 +114,7 @@ public class AgentSpawner : MonoBehaviour
             
             if (distanceToGoal < goalReachedDistance)
             {
-                // Remove the agent from simulator's list
-                simulator.RemoveAgent(agent);
-                
-                // Remove from our tracking
-                agentOrigins.Remove(agent);
-                
-                // Destroy the agent
-                Destroy(agent.gameObject);
-                
-                // Spawn a new agent to replace this one
-                SpawnNewAgent();
+                HandleAgentReachedGoal(agent);
             }
         }
     }
@@ -166,8 +172,10 @@ public class AgentSpawner : MonoBehaviour
             
         GameObject spawnPoint = allSpawnPoints[Random.Range(0, allSpawnPoints.Count)];
         
-        // Spawn the agent
+        // Get the exact spawn position (center of the spawner)
         Vector3 spawnPos = spawnPoint.transform.position + Vector3.up * spawnHeight;
+        
+        // Spawn the agent
         Agent agent = SpawnSingleAgent(spawnPos);
         
         // Register the agent with the simulator
@@ -236,6 +244,12 @@ public class AgentSpawner : MonoBehaviour
         // Set the agent's radius (assumes agent's prefab scale represents its size)
         agent.radius = agentPrefab.transform.localScale.x / 2;
 
+        // Ensure we have at least one color in the array
+        if (agentColors == null || agentColors.Length == 0)
+        {
+            agentColors = new Color[] { Color.red, Color.green, Color.blue, Color.yellow, Color.magenta, Color.cyan };
+        }
+
         // Assign a unique color from the array (cycling through if there are more agents than colors)
         Color assignedColor = agentColors[colorIndex % agentColors.Length];
         colorIndex++;
@@ -250,12 +264,14 @@ public class AgentSpawner : MonoBehaviour
         Renderer rend = agent.GetComponent<Renderer>();
         if (rend != null)
         {
-            rend.material = new Material(rend.material);
-            rend.material.color = assignedColor;
+            // Create a new material instance to avoid sharing
+            Material newMaterial = new Material(rend.sharedMaterial);
+            newMaterial.color = assignedColor;
+            rend.material = newMaterial;
         }
         
         // Set a default velocity
-        agent.velocity = simulator.agentMaxSpeed * 0.5f; // Half of max speed
+        agent.velocity = simulator.agentMaxSpeed_v0 * 0.5f; // Half of max speed
         
         // Give the agent a unique name
         agent.name = "Agent_" + activeAgentCount;
@@ -292,17 +308,70 @@ public class AgentSpawner : MonoBehaviour
         return allSpawnPoints[Random.Range(0, allSpawnPoints.Count)];
     }
 
-    // Add this method to the AgentSpawner class
+    // Update the SpawnAgents method to spawn agents with delay
     public List<Agent> SpawnAgents()
     {
         List<Agent> agents = new List<Agent>();
-        // Spawn the specified number of agents
-        for (int i = 0; i < amountOfAgents; i++)
-        {
-            Agent newAgent = SpawnNewAgent();
-            agents.Add(newAgent);
-        }
+        
+        // Start a coroutine to spawn agents with delay
+        StartCoroutine(SpawnAgentsWithDelay(agents));
+        
         return agents;
+    }
+
+    // Coroutine to spawn agents with delay
+    private IEnumerator SpawnAgentsWithDelay(List<Agent> agentsList)
+    {
+        // Get all available spawn points
+        List<GameObject> spawnPoints = new List<GameObject>();
+        spawnPoints.AddRange(spawnPortals);
+        spawnPoints.AddRange(dualPortals);
+        
+        if (spawnPoints.Count == 0)
+        {
+            Debug.LogError("No spawn points available!");
+            yield break;
+        }
+        
+        // Spawn the specified number of agents
+        for (int i = 0; i < maxAgents; i++)
+        {
+            // Choose a random spawn point
+            GameObject spawnPoint = spawnPoints[Random.Range(0, spawnPoints.Count)];
+            
+            // Get the exact spawn position (center of the spawner)
+            Vector3 spawnPos = spawnPoint.transform.position + Vector3.up * spawnHeight;
+            
+            // Spawn the agent
+            Agent newAgent = SpawnSingleAgent(spawnPos);
+            if (newAgent != null)
+            {
+                // Register the agent with the simulator
+                simulator.agents.Add(newAgent);
+                
+                // Track where this agent came from
+                agentOrigins[newAgent] = spawnPoint;
+                
+                // Assign a goal
+                AssignNewGoal(newAgent);
+                
+                // Set the agent's initial direction toward the goal
+                SetAgentDirectionTowardGoal(newAgent);
+                
+                activeAgentCount++;
+                agentsList.Add(newAgent);
+                
+                // Notify the ScriptManager that we've added an agent
+                ScriptManager scriptManager = FindObjectOfType<ScriptManager>();
+                if (scriptManager != null)
+                {
+                    scriptManager.OnAgentSpawned(newAgent);
+                }
+            }
+            
+            // Add a delay before spawning the next agent
+            yield return new WaitForSeconds(0.2f);
+        }
     }
 
     // Add this method to set the agent's initial direction toward its goal
@@ -329,5 +398,59 @@ public class AgentSpawner : MonoBehaviour
                 agent.transform.forward = direction;
             }
         }
+    }
+
+    // Add this method to AgentSpawner.cs
+    private void EnsureAgentColor(Agent agent)
+    {
+        // Check if the agent has a renderer
+        Renderer rend = agent.GetComponent<Renderer>();
+        if (rend == null) return;
+        
+        // Check if the agent's color matches the assigned color
+        if (rend.material.color != agent.agentColor)
+        {
+            // Create a new material to avoid sharing
+            Material newMaterial = new Material(Shader.Find("Standard"));
+            newMaterial.color = agent.agentColor;
+            rend.material = newMaterial;
+            
+            Debug.Log($"Fixed color for agent {agent.name}");
+        }
+    }
+
+    // Update this method to use exact portal position
+    public void HandleAgentReachedGoal(Agent agent)
+    {
+        if (agent == null) return;
+        
+        // Choose a new spawn point
+        GameObject spawnPoint = GetRandomSpawnPortal();
+        if (spawnPoint == null) return;
+        
+        // Get the exact spawn position (center of the spawner)
+        Vector3 newPosition = spawnPoint.transform.position + Vector3.up * spawnHeight;
+        
+        // Before moving the agent, completely reset its trail tracking
+        if (simulator != null)
+        {
+            // Pass the new position to the reset method
+            simulator.ResetAgentTrailTracking(agent, newPosition);
+        }
+        
+        // Move the agent to the new spawn point
+        agent.transform.position = newPosition;
+        
+        // Update the agent's origin
+        agentOrigins[agent] = spawnPoint;
+        
+        // Assign a new goal
+        AssignNewGoal(agent);
+        
+        // Reset the agent's velocity toward the new goal
+        SetAgentDirectionTowardGoal(agent);
+        
+        // Reset the agent's previous position for Verlet integration
+        agent.previousPosition = newPosition;
     }
 } 

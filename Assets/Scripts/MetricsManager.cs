@@ -217,4 +217,20 @@ public class MetricsManager : MonoBehaviour
 
         return averageCivility;
     }
+
+    // Add these methods to expose metrics
+    public float GetEfficiency()
+    {
+        return CalculateEfficiency();
+    }
+
+    public float GetCivility()
+    {
+        return CalculateCivility();
+    }
+
+    public float GetCurrentFPS()
+    {
+        return currentFps;
+    }
 } 
