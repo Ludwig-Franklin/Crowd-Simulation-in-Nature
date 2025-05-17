@@ -1383,21 +1383,19 @@ MonoBehaviour:
   agentRepulsionForce: 0
   agentRepulsionRadius: 1.5
   pathFollowStrength: 1
-  HelbingsDistanceFactor_sigma: 0.1
+  HelbingsDistanceFactor_sigma: 5
   visualPathFollowStrength: 1
-  VisualDistanceFactor_sigma: 0.1
+  VisualDistanceFactor_sigma: 5
   agentMaxSpeed_v0: 5
   relaxationTime_tau: 0.5
   goalReachedThreshold: 0.5
-  currentPathFollowingMethod: 0
-  visionArcCount: 10
-  firstArcPointCount: 10
-  lastArcPointCount: 20
+  currentPathFollowingMethod: 1
+  visionArcCount: 20
+  firstArcPointCount: 100
+  lastArcPointCount: 200
   showForces: 1
   showSampledPoints: 1
-  samplePointScale: 1
   trailWidth: 3
-  trailUpdateIntervalFrames: 5
   trailRecoveryRate_T: 5
   maxComfortLevel: 20
   footstepIntensity_I: 0.8
@@ -1412,7 +1410,6 @@ MonoBehaviour:
   trailComputeShader: {fileID: 7200000, guid: 889540169cf756d41b9d3cf8b5a80931, type: 3}
   planeMaterial: {fileID: 10303, guid: 0000000000000000f000000000000000, type: 0}
   textureResolution: 100
-  comfortMapUpdateInterval: 5
   forceTextureUpdate: 0
   agents: []
 --- !u!114 &1764469330

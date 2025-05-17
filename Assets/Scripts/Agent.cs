@@ -22,8 +22,9 @@ public class Agent : MonoBehaviour
     public Color samplingPointColor = Color.yellow;
     [Tooltip("Color for points with trails")]
     public Color trailPointColor = Color.green;
-    [Tooltip("Color for the closest trail point")]
-    public Color closestTrailPointColor = Color.cyan;
+    [Tooltip("Size for the sampled points")]
+    public float pointSize = 0.5f;
+
 
     // Vision cone parameters
     [Header("Vision Cone Settings")]
@@ -121,7 +122,7 @@ public class Agent : MonoBehaviour
         }
 
         // --- Draw Vision Cone ---
-        if (showSightBox) // Use agent's local toggle
+        if (showSightBox && simulator.showSampledPoints)
         {
             Gizmos.color = sightBoxColor;
             
@@ -165,22 +166,15 @@ public class Agent : MonoBehaviour
             {
                 foreach (var point in points)
                 {
-                    if (point.isChosenPoint)
+                    if (point.hasTrail)
                     {
-                        Gizmos.color = closestTrailPointColor;
-                        Gizmos.DrawSphere(point.position, 0.15f);
-                        Gizmos.DrawLine(transform.position, point.position);
-                    }
-                    else if (point.hasTrail)
-                    {
-                        float size = 0.05f + point.contributionWeight * 0.2f;
-                        Gizmos.color = Color.Lerp(trailPointColor, closestTrailPointColor, point.contributionWeight);
-                        Gizmos.DrawSphere(point.position, size);
+                        Gizmos.color = trailPointColor;
+                        Gizmos.DrawSphere(point.position, pointSize);
                     }
                     else
                     {
                         Gizmos.color = samplingPointColor;
-                        Gizmos.DrawSphere(point.position, 0.03f);
+                        Gizmos.DrawSphere(point.position, pointSize);
                     }
                 }
             }

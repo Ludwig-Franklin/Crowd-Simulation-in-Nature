@@ -106,7 +106,7 @@ MonoBehaviour:
   sightBoxColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
   samplingPointColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
   trailPointColor: {r: 0, g: 1, b: 0, a: 1}
-  closestTrailPointColor: {r: 0, g: 1, b: 1, a: 1}
+  pointSize: 0.3
   visionLength: 10
   fieldOfView: 120
   goalForceColor: {r: 0, g: 1, b: 0, a: 1}

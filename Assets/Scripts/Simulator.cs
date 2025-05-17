@@ -73,9 +73,6 @@ public class Simulator : MonoBehaviour
     [Header("Path Creation Settings")]
     [Tooltip("Width of the trail in pixels")]
     public float trailWidth = 6f;
-    [Tooltip("How many FixedUpdate frames to wait between trail updates for each agent.")]
-    [Range(1, 100)]
-    public int trailUpdateIntervalFrames = 5;
 
     [Header("Trail Settings")]
     [Tooltip("Time scale for trail decay in seconds (T in equation 5) - higher values mean slower decay")]
@@ -109,7 +106,6 @@ public class Simulator : MonoBehaviour
     
     [Header("Texture Settings")]
     public int textureResolution = 256;
-    public float comfortMapUpdateInterval = 5f;
 
     // Private variables
     private Color[] trailColors;
@@ -128,8 +124,6 @@ public class Simulator : MonoBehaviour
     
     public List<Agent> agents = new List<Agent>();
 
-    // Add a dictionary to track agents that should skip trail creation for one frame
-    private Dictionary<Agent, bool> skipTrailCreation = new Dictionary<Agent, bool>();
 
     void Awake()
     {
@@ -351,7 +345,7 @@ public class Simulator : MonoBehaviour
                         Vector3 cellWorldPos = TextureCoordToWorld(new Vector2(x, y));
                         
                         // Calculate force contribution from this point
-                        trailForce += CalculateForceContribution(agentPos, cellWorldPos, G, HelbingsDistanceFactor_sigma, 1.0f);
+                        trailForce += CalculateForceContribution(agentPos, cellWorldPos, G, HelbingsDistanceFactor_sigma);
                     }
                 }
             }
@@ -383,8 +377,7 @@ public class Simulator : MonoBehaviour
                     agentPos, 
                     point.position, 
                     point.comfortValue, 
-                    VisualDistanceFactor_sigma, 
-                    point.contributionWeight);
+                    VisualDistanceFactor_sigma);
             }
             
             // Scale the trail force by the visual path follow strength
@@ -395,7 +388,7 @@ public class Simulator : MonoBehaviour
     }
 
     // Helper method to calculate force contribution from a single point
-    private Vector3 CalculateForceContribution(Vector3 agentPos, Vector3 pointPos, float comfortValue, float sigma, float weight)
+    private Vector3 CalculateForceContribution(Vector3 agentPos, Vector3 pointPos, float comfortValue, float sigma)
     {
         // Calculate direction and distance
         Vector3 direction = pointPos - agentPos;
@@ -407,7 +400,7 @@ public class Simulator : MonoBehaviour
         // Calculate force contribution based on equation (2)
         // f_i,trail = ∫ d²r (r - r_i)/|r - r_i| * exp(-|r - r_i|/σ) * G(r)/(2πσ²)
         float distanceFactor = Mathf.Exp(-distance / sigma) / (2 * Mathf.PI * sigma * sigma);
-        Vector3 forceContribution = direction.normalized * comfortValue * distanceFactor * weight;
+        Vector3 forceContribution = direction.normalized * comfortValue * distanceFactor;
         
         return forceContribution;
     }
@@ -801,9 +794,7 @@ public class Simulator : MonoBehaviour
                 {
                     position = position,
                     hasTrail = false,
-                    comfortValue = 0f,
-                    contributionWeight = 0f,
-                    isChosenPoint = false
+                    comfortValue = 0f
                 };
                 
                 // Check if this point has a trail
@@ -824,45 +815,6 @@ public class Simulator : MonoBehaviour
                 points.Add(point);
             }
         }
-        
-        // Find the best trail point (if any)
-        List<SamplePoint> trailPoints = points.FindAll(p => p.hasTrail);
-        if (trailPoints.Count > 0)
-        {
-            // Sort by comfort value (descending)
-            trailPoints.Sort((a, b) => b.comfortValue.CompareTo(a.comfortValue));
-            
-            // Mark the best point
-            int bestPointIndex = points.IndexOf(trailPoints[0]);
-            if (bestPointIndex >= 0)
-            {
-                SamplePoint bestPoint = points[bestPointIndex];
-                bestPoint.isChosenPoint = true;
-                points[bestPointIndex] = bestPoint;
-            }
-            
-            // Calculate contribution weights for all trail points
-            float totalComfort = 0f;
-            foreach (var point in trailPoints)
-            {
-                totalComfort += point.comfortValue;
-            }
-            
-            if (totalComfort > 0f)
-            {
-                // Update contribution weights
-                for (int i = 0; i < points.Count; i++)
-                {
-                    SamplePoint point = points[i];
-                    if (point.hasTrail)
-                    {
-                        point.contributionWeight = point.comfortValue / totalComfort;
-                        points[i] = point; // Assign back to the list
-                    }
-                }
-            }
-        }
-        
         return points;
     }
 
@@ -950,12 +902,6 @@ public class Simulator : MonoBehaviour
 
     private void CreateTrailForAgent(Agent agent)
     {
-        // Check if this agent should skip trail creation this frame
-        if (skipTrailCreation.TryGetValue(agent, out bool skip) && skip)
-        {
-            skipTrailCreation[agent] = false; // Reset for next frame
-            return;
-        }
         
         // Get the agent's position but project it onto the plane (use the plane's Y position)
         Vector3 projectedPosition = agent.transform.position;
@@ -1149,7 +1095,7 @@ public class Simulator : MonoBehaviour
         agent.previousPosition = newPosition;
         
         // Set the skip flag for the next frame
-        skipTrailCreation[agent] = true;
+        //skipTrailCreation[agent] = true;
        
     }
 
