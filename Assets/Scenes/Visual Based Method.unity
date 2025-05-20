@@ -1355,7 +1355,7 @@ MonoBehaviour:
   - {r: 1, g: 0, b: 1, a: 1}
   - {r: 0, g: 1, b: 1, a: 1}
   visionLength: 30
-  fieldOfView: 180
+  fieldOfView: 120
   spawnPortals: []
   goalPortals: []
   dualPortals:
@@ -1384,15 +1384,15 @@ MonoBehaviour:
   agentRepulsionRadius: 1.5
   pathFollowStrength: 1
   HelbingsDistanceFactor_sigma: 5
-  visualPathFollowStrength: 1
+  visualPathFollowStrength: 12
   VisualDistanceFactor_sigma: 5
   agentMaxSpeed_v0: 5
   relaxationTime_tau: 0.5
   goalReachedThreshold: 0.5
   currentPathFollowingMethod: 1
-  visionArcCount: 20
-  firstArcPointCount: 100
-  lastArcPointCount: 200
+  visionArcCount: 10
+  firstArcPointCount: 20
+  lastArcPointCount: 40
   showForces: 1
   showSampledPoints: 1
   trailWidth: 3

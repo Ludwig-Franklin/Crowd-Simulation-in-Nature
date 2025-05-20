@@ -36,7 +36,7 @@ public class Simulator : MonoBehaviour
     public float visualPathFollowStrength = 10f;
 
     [Tooltip("Distance factor for vision-based method (higher values reduce effect at distance) (sigma)")]
-    [Range(0f, 10f)]
+    [Range(0f, 1000f)]
     public float VisualDistanceFactor_sigma = 0.1f;
 
     [Header("Movement Limits")]
@@ -410,8 +410,15 @@ public class Simulator : MonoBehaviour
         if (agent == null)
             return null;
         
-        // Return the cached sample points if they exist
-        if (agentSamplePoints.TryGetValue(agent, out List<SamplePoint> points))
+        // Always regenerate sample points when in editor mode and showing sample points
+        // This ensures we always see up-to-date points in the editor
+        if (showSampledPoints && Application.isEditor)
+        {
+            return GenerateSamplePoints(agent);
+        }
+        
+        // For gameplay/simulation, use cached points if they exist
+        if (agentSamplePoints.TryGetValue(agent, out List<SamplePoint> points) && points != null && points.Count > 0)
         {
             return points;
         }
@@ -770,17 +777,27 @@ public class Simulator : MonoBehaviour
         float planeY = plane.transform.position.y;
         
         // Generate sample points in a grid within the vision cone
-        int ringsCount = 5; // Number of distance rings
-        int pointsPerRing = 7; // Number of points per ring
+        // Use the configurable parameters from the Simulator
+        int ringsCount = visionArcCount;
         
+        // Calculate points per ring based on position in the vision cone
+        // First ring has fewer points, last ring has more
         for (int r = 1; r <= ringsCount; r++)
         {
             float distance = (visionLength * r) / ringsCount;
             
-            for (int p = 0; p < pointsPerRing; p++)
+            // Calculate how many points should be on this arc
+            // Linearly interpolate between firstArcPointCount and lastArcPointCount
+            int pointsOnThisArc = Mathf.RoundToInt(Mathf.Lerp(
+                firstArcPointCount, 
+                lastArcPointCount, 
+                (float)(r - 1) / (ringsCount - 1)
+            ));
+            
+            for (int p = 0; p < pointsOnThisArc; p++)
             {
                 // Calculate angle within FOV
-                float angle = -halfFOV + (p * (2 * halfFOV) / (pointsPerRing - 1));
+                float angle = -halfFOV + (p * (2 * halfFOV) / (pointsOnThisArc - 1));
                 
                 // Calculate direction using rotation in XZ plane
                 Vector3 direction = forward * Mathf.Cos(angle) + right * Mathf.Sin(angle);
@@ -815,6 +832,10 @@ public class Simulator : MonoBehaviour
                 points.Add(point);
             }
         }
+        
+        // Store the generated points for this agent
+        agentSamplePoints[agent] = points;
+        
         return points;
     }
 
@@ -1088,15 +1109,13 @@ public class Simulator : MonoBehaviour
         Vector2 newTexCoord = WorldToTextureCoord(newPosition);
         agentPreviousPositions.Add(agent, newTexCoord);
         agentLastTrailUpdateFrame.Add(agent, Time.frameCount);
-        agentSamplePoints.Add(agent, new List<SamplePoint>());
         
         // Force the agent's previous position to be the same as current position
         // to prevent any velocity-based trail creation
         agent.previousPosition = newPosition;
         
-        // Set the skip flag for the next frame
-        //skipTrailCreation[agent] = true;
-       
+        // Force regeneration of sample points on the next frame
+        // We don't add an empty list here, so GetSamplePointsForAgent will generate new points
     }
 
     // Add this method to register a single agent

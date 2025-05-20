@@ -161,6 +161,7 @@ public class Agent : MonoBehaviour
         // Draw sample points ONLY if the global flag is set
         if (simulator.showSampledPoints)
         {
+            // Always get fresh sample points when selected in the editor
             List<SamplePoint> points = simulator.GetSamplePointsForAgent(this);
             if (points != null)
             {

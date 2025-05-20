@@ -148,7 +148,7 @@ public class ExperimentManager : MonoBehaviour
         simulator.currentPathFollowingMethod = method;
         
         // Set agent count
-        agentSpawner.maxAgents = config.agentCount;
+        agentSpawner.agentAmount = config.agentCount;
         
         // Start the simulation
         scriptManager.StartSimulation();

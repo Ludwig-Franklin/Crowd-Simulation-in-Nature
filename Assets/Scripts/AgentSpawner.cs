@@ -9,7 +9,7 @@ public class AgentSpawner : MonoBehaviour
     public GameObject agentPrefab;
     public float spawnHeight = 0.0f; // Height above portal to spawn agents
     [Tooltip("Maximum number of agents to spawn")]
-    public int maxAgents = 20;
+    public int agentAmount = 20;
     
     // Pre-defined array of colors to assign
     public Color[] agentColors = new Color[] { Color.red, Color.green, Color.blue, Color.yellow, Color.magenta, Color.cyan };
@@ -44,7 +44,7 @@ public class AgentSpawner : MonoBehaviour
     
     // Reference to simulator
     private Simulator simulator;
-    
+
     void Start()
     {
         // Find the simulator
@@ -54,12 +54,12 @@ public class AgentSpawner : MonoBehaviour
             Debug.LogError("Simulator not found in the scene!");
             return;
         }
-        
+
         // Set up portal colors
         SetupPortalColors();
         
-        // Initial spawn of agents up to maxAgents
-        for (int i = 0; i < maxAgents && i < 5; i++) // Start with at most 5 agents
+        // Spawn all agents at start
+        for (int i = 0; i < agentAmount; i++)
         {
             SpawnNewAgent();
         }
@@ -67,23 +67,6 @@ public class AgentSpawner : MonoBehaviour
     
     void Update()
     {
-        // Check if we need to spawn more agents to maintain the desired count
-        if (simulator.agents.Count < maxAgents)
-        {
-            // Calculate how many agents we need to spawn
-            int agentsToSpawn = maxAgents - simulator.agents.Count;
-            
-            // Spawn new agents up to the maximum
-            for (int i = 0; i < agentsToSpawn; i++)
-            {
-                if (Time.time > nextSpawnTime)
-                {
-                    SpawnNewAgent();
-                    nextSpawnTime = Time.time + spawnInterval;
-                }
-            }
-        }
-        
         // Check agent colors periodically
         if (Time.frameCount % 30 == 0)
         {
@@ -159,7 +142,7 @@ public class AgentSpawner : MonoBehaviour
     private Agent SpawnNewAgent()
     {
         // Don't spawn if we're at max capacity
-        if (simulator.agents.Count >= maxAgents)
+        if (simulator.agents.Count >= agentAmount)
             return null;
             
         // Choose a random spawn portal
@@ -313,6 +296,12 @@ public class AgentSpawner : MonoBehaviour
     {
         List<Agent> agents = new List<Agent>();
         
+        // If we already have agents, don't spawn more
+        if (simulator.agents.Count >= agentAmount)
+        {
+            return simulator.agents;
+        }
+        
         // Start a coroutine to spawn agents with delay
         StartCoroutine(SpawnAgentsWithDelay(agents));
         
@@ -333,8 +322,11 @@ public class AgentSpawner : MonoBehaviour
             yield break;
         }
         
+        // Calculate how many more agents we need
+        int agentsToSpawn = agentAmount - simulator.agents.Count;
+        
         // Spawn the specified number of agents
-        for (int i = 0; i < maxAgents; i++)
+        for (int i = 0; i < agentsToSpawn; i++)
         {
             // Choose a random spawn point
             GameObject spawnPoint = spawnPoints[Random.Range(0, spawnPoints.Count)];
