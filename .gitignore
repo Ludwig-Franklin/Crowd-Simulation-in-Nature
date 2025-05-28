@@ -74,3 +74,4 @@ crashlytics-build.properties
 /Assets/simulation_data
 *.meta
 /Assets/ExperimentData
+Assets/Scripts/thesis.tex

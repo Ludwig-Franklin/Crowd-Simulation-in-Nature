@@ -604,7 +604,7 @@ def plot_test2(data_folder):
 def plot_test4(data_folder):
     """Plot performance scaling test results"""
     test_folder = os.path.join(data_folder, "4_Performance_with_varying_agent_count_and_Resolution")
-    results_folder = os.path.join(test_folder, "Results")
+    results_folder = os.path.join(test_folder, "_Results")
     if not os.path.exists(results_folder):
         os.makedirs(results_folder)
     
@@ -639,154 +639,531 @@ def plot_test4(data_folder):
             if resolution and method and agent_count:
                 data_by_resolution[resolution][method].append((agent_count, data))
 
-    # Create time series plots for each resolution
-    for resolution in [100, 200, 300]:
-        plt.figure(figsize=(15, 8))
+    # Create combined time series plots for each metric, stacked by resolution
+    metrics = ['Efficiency', 'Civility', 'TimeForInterval']
+    metric_titles = ['Efficiency', 'Civility', 'Time per Step (seconds)']
+    
+    for metric, title in zip(metrics, metric_titles):
+        # Create figure with 3 subplots stacked vertically
+        fig, axes = plt.subplots(3, 1, figsize=(15, 20))
         
-        # Sort data by agent count
-        for method in ["helbing", "vision"]:
-            data_by_resolution[resolution][method].sort(key=lambda x: x[0])
+        for res_idx, resolution in enumerate([100, 200, 300]):
+            ax = axes[res_idx]
             
-            # Group data by agent count
-            agent_groups = {}
-            for agent_count, data in data_by_resolution[resolution][method]:
-                if agent_count not in agent_groups:
-                    agent_groups[agent_count] = []
-                agent_groups[agent_count].append(data)
-            
-            # Plot each agent count
-            for agent_count, group_data in agent_groups.items():
-                # Calculate mean and std for each time step
-                mean_times = np.mean([data['TimeForInterval'] for data in group_data], axis=0)
-                std_times = np.std([data['TimeForInterval'] for data in group_data], axis=0)
-                steps = np.arange(len(mean_times)) * 100  # Convert to actual step numbers
+            for method in ["helbing", "vision"]:
+                data_by_resolution[resolution][method].sort(key=lambda x: x[0])
                 
-                plt.plot(steps, mean_times, 
-                        label=f"{'Helbing' if method == 'helbing' else 'Vision'}-based ({agent_count} agents)",
-                        marker='o', markersize=4)
-                plt.fill_between(steps, 
-                               mean_times - std_times, 
-                               mean_times + std_times, 
-                               alpha=0.2)
+                # Group data by agent count
+                agent_groups = {}
+                for agent_count, data in data_by_resolution[resolution][method]:
+                    if agent_count not in agent_groups:
+                        agent_groups[agent_count] = []
+                    agent_groups[agent_count].append(data)
+                
+                # Plot each agent count
+                for agent_count, group_data in agent_groups.items():
+                    if metric == 'TimeForInterval':
+                        # Divide time values by 100 to get actual time per step
+                        mean_values = np.mean([data[metric] / 100.0 for data in group_data], axis=0)
+                        std_values = np.std([data[metric] / 100.0 for data in group_data], axis=0)
+                    else:
+                        # Keep other metrics as they are
+                        mean_values = np.mean([data[metric] for data in group_data], axis=0)
+                        std_values = np.std([data[metric] for data in group_data], axis=0)
+                    
+                    steps = np.arange(len(mean_values)) * 100
+                    
+                    ax.plot(steps, mean_values, 
+                           label=f"{'Helbing' if method == 'helbing' else 'Vision'}-based ({agent_count} agents)",
+                           marker='o', markersize=4)
+                    ax.fill_between(steps, 
+                                  mean_values - std_values, 
+                                  mean_values + std_values, 
+                                  alpha=0.2)
+            
+            ax.set_title(f'Resolution {resolution}×{resolution}')
+            ax.set_xlabel('Simulation Step')
+            ax.set_ylabel('Time per Step (seconds)' if metric == 'TimeForInterval' else title)
+            ax.grid(True, alpha=0.3)
+            ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
         
-        plt.title(f'Performance Over Time at Resolution {resolution}×{resolution}')
-        plt.xlabel('Simulation Step')
-        plt.ylabel('Time per Step (seconds)')
-        plt.grid(True, alpha=0.3)
-        plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+        plt.suptitle(f'{title} Over Time', y=0.95, fontsize=14)
         plt.tight_layout()
-        plt.savefig(os.path.join(results_folder, f'performance_time_series_res{resolution}.png'), 
-                   bbox_inches='tight', dpi=300)
+        plt.savefig(os.path.join(results_folder, f'{metric.lower()}_combined_time_series.png'), 
+                    bbox_inches='tight', dpi=300)
         plt.close()
 
-    # Create bar plots for each resolution
-    for resolution in [100, 200, 300]:
-        plt.figure(figsize=(12, 6))
-        
-        agent_counts = sorted(list(set(x[0] for x in data_by_resolution[resolution]["helbing"])))
-        x = np.arange(len(agent_counts))
-        width = 0.35
-        
-        # Calculate means and standard deviations
-        helbing_means = []
-        helbing_stds = []
-        vision_means = []
-        vision_stds = []
-        
-        for ac in agent_counts:
-            helbing_data = [d[1]['TimeForInterval'].mean() for d in data_by_resolution[resolution]["helbing"] if d[0] == ac]
-            vision_data = [d[1]['TimeForInterval'].mean() for d in data_by_resolution[resolution]["vision"] if d[0] == ac]
-            
-            helbing_means.append(np.mean(helbing_data))
-            helbing_stds.append(np.std(helbing_data))
-            vision_means.append(np.mean(vision_data))
-            vision_stds.append(np.std(vision_data))
-        
-        plt.bar(x - width/2, helbing_means, width, yerr=helbing_stds, 
-                label="Helbing's Method", capsize=5)
-        plt.bar(x + width/2, vision_means, width, yerr=vision_stds, 
-                label="Vision-based Method", capsize=5)
-        
-        plt.title(f'Average Performance at Resolution {resolution}×{resolution}')
-        plt.xlabel('Number of Agents')
-        plt.ylabel('Average Time per Step (seconds)')
-        plt.xticks(x, agent_counts)
-        plt.legend()
-        plt.grid(True, alpha=0.3)
-        plt.tight_layout()
-        plt.savefig(os.path.join(results_folder, f'performance_bar_res{resolution}.png'))
-        plt.close()
-
-    # Create combined plot for all resolutions
-    plt.figure(figsize=(15, 8))
+    # Add overall performance comparison bar chart
+    plt.figure(figsize=(10, 6))
     
+    # Calculate average metrics across all configurations
+    metrics = ['Efficiency', 'Civility']
+    helbing_means = {metric: [] for metric in metrics}
+    helbing_stds = {metric: [] for metric in metrics}
+    vision_means = {metric: [] for metric in metrics}
+    vision_stds = {metric: [] for metric in metrics}
+    
+    # Collect all data for each method and metric
     for resolution in [100, 200, 300]:
         for method in ["helbing", "vision"]:
-            data_by_resolution[resolution][method].sort(key=lambda x: x[0])
-            
-            # Group data by agent count
-            agent_groups = {}
-            for agent_count, data in data_by_resolution[resolution][method]:
-                if agent_count not in agent_groups:
-                    agent_groups[agent_count] = []
-                agent_groups[agent_count].append(data)
-            
-            # Plot each agent count
-            for agent_count, group_data in agent_groups.items():
-                mean_times = np.mean([data['TimeForInterval'] for data in group_data], axis=0)
-                std_times = np.std([data['TimeForInterval'] for data in group_data], axis=0)
-                steps = np.arange(len(mean_times)) * 100
+            for metric in metrics:
+                all_values = []
+                for agent_count, data in data_by_resolution[resolution][method]:
+                    all_values.append(data[metric].mean())
                 
-                plt.plot(steps, mean_times, 
-                        label=f"{'Helbing' if method == 'helbing' else 'Vision'}-based ({resolution}×{resolution}, {agent_count} agents)",
-                        marker='o', markersize=4)
-                plt.fill_between(steps, 
-                               mean_times - std_times, 
-                               mean_times + std_times, 
-                               alpha=0.2)
+                if method == "helbing":
+                    helbing_means[metric].append(np.mean(all_values))
+                    helbing_stds[metric].append(np.std(all_values))
+                else:
+                    vision_means[metric].append(np.mean(all_values))
+                    vision_stds[metric].append(np.std(all_values))
     
-    plt.title('Performance Scaling Across All Configurations')
-    plt.xlabel('Simulation Step')
-    plt.ylabel('Time per Step (seconds)')
+    # Create grouped bar chart
+    x = np.arange(len(metrics))
+    width = 0.35
+    
+    plt.bar(x - width/2, 
+           [np.mean(helbing_means[m]) for m in metrics],
+           width,
+           yerr=[np.mean(helbing_stds[m]) for m in metrics],
+           label="Helbing's Method",
+           capsize=5)
+    
+    plt.bar(x + width/2,
+           [np.mean(vision_means[m]) for m in metrics],
+           width,
+           yerr=[np.mean(vision_stds[m]) for m in metrics],
+           label="Vision-based Method",
+           capsize=5)
+    
+    plt.ylabel('Average Value')
+    plt.title('Overall Performance Comparison')
+    plt.xticks(x, metrics)
+    plt.legend()
     plt.grid(True, alpha=0.3)
-    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+    
     plt.tight_layout()
-    plt.savefig(os.path.join(results_folder, 'performance_combined.png'), 
+    plt.savefig(os.path.join(results_folder, 'overall_performance_comparison.png'),
                 bbox_inches='tight', dpi=300)
     plt.close()
 
-    # Create combined bar plot
-    plt.figure(figsize=(15, 8))
+def create_screenshot_grid(data_folder):
+    """Create a grid of screenshots comparing Helbing and Vision methods"""
+    test_folder = os.path.join(data_folder, "4_Performance_with_varying_agent_count_and_Resolution")
+    results_folder = os.path.join(test_folder, "_Results")
+    if not os.path.exists(results_folder):
+        os.makedirs(results_folder)
+
+    # Configurations to compare
+    configs = [
+        (100, 30), (100, 40),
+        (200, 30), (200, 40)
+    ]
     
-    # Prepare data for grouped bar chart
-    resolutions = [100, 200, 300]
-    agent_counts = sorted(list(set(x[0] for x in data_by_resolution[100]["helbing"])))
-    x = np.arange(len(agent_counts))
-    width = 0.1  # Width of each bar
+    # Modified steps to skip even hundreds
+    steps = [100, 300, 500, 700, 900, 1000]
+    n_steps = len(steps)
+    n_rows = len(configs) * 2  # Helbing and Vision for each config
+    n_cols = 6  # Reduced to 6 screenshots per row
     
-    for i, resolution in enumerate(resolutions):
-        for method in ["helbing", "vision"]:
-            means = []
-            stds = []
-            for ac in agent_counts:
-                data = [d[1]['TimeForInterval'].mean() for d in data_by_resolution[resolution][method] if d[0] == ac]
-                means.append(np.mean(data))
-                stds.append(np.std(data))
+    # Create figure
+    fig = plt.figure(figsize=(20, 2.5 * n_rows))
+    
+    # Add step numbers at the top - centered over each column
+    for col_idx, step in enumerate(steps):
+        x = 0.1 + (col_idx + 0.5) * 0.85/n_cols
+        plt.figtext(x, 
+                    0.98, 
+                   f'Step {step}',
+                   ha='center', va='bottom', fontsize=12, weight='bold')
+
+    for config_idx, (resolution, agent_count) in enumerate(configs):
+        row_base = config_idx * 2  # Keep this as integer for subplot indexing
+        row_spacing = config_idx * 1.8125  # Use this for text and line positioning
+        
+        # Calculate y positions for text - adjusted for better centering
+        y_helbing = 1 - (row_spacing + 0.875) / n_rows
+        y_config_line1 = 1 - (row_spacing + 1.25) / n_rows
+        y_config_line2 = 1 - (row_spacing + 1.35) / n_rows
+        y_vision = 1 - (row_spacing + 1.75) / n_rows
+        
+        # Add method labels and configuration text
+        plt.figtext(0.02, y_helbing, "Helbing", ha='left', va='center', fontsize=12, weight='bold')
+        plt.figtext(0.02, y_config_line1, f'{resolution}×{resolution}', ha='left', va='center', fontsize=12, weight='bold')
+        plt.figtext(0.02, y_config_line2, f'{agent_count} agents', ha='left', va='center', fontsize=12, weight='bold')
+        plt.figtext(0.02, y_vision, "Vision", ha='left', va='center', fontsize=12, weight='bold')
+        
+        for method_idx in range(2):
+            row_idx = row_base + method_idx  # Use integer row_base for subplot indexing
             
-            offset = (i * 2 + (0 if method == "helbing" else 1)) * width
-            plt.bar(x + offset, means, width, yerr=stds, capsize=5,
-                   label=f"{'Helbing' if method == 'helbing' else 'Vision'}-based ({resolution}×{resolution})")
+            # Find the corresponding simulation folder
+            sim_folder_pattern = f"{'Helbing' if method_idx == 0 else 'Vision'}_resolution={resolution}_agents={agent_count}_repetition=1"
+            sim_folders = [f for f in os.listdir(test_folder) 
+                         if os.path.isdir(os.path.join(test_folder, f)) 
+                         and f.startswith(sim_folder_pattern)]
+            
+            if not sim_folders:
+                print(f"No folder found for {sim_folder_pattern}")
+                continue
+                
+            sim_folder = sim_folders[0]
+            screenshot_folder = os.path.join(test_folder, sim_folder)
+            
+            # Process screenshots for this configuration
+            for col_idx, step in enumerate(steps):
+                screenshot_file = f'step_{step}.png'
+                if os.path.exists(os.path.join(screenshot_folder, screenshot_file)):
+                    # Read and crop image
+                    img = plt.imread(os.path.join(screenshot_folder, screenshot_file))
+                    h, w = img.shape[:2]
+                    crop_h = int(h * 0.1)
+                    crop_w = int(w * 0.2)  # Increased side cropping
+                    img = img[crop_h:-crop_h, crop_w:-crop_w]
+                    
+                    # Add to grid
+                    ax = plt.subplot(n_rows, n_cols, row_idx * n_cols + col_idx + 1)
+                    ax.imshow(img)
+                    ax.axis('off')
+            
+            # Add horizontal line after Vision method
+            if method_idx == 1 and config_idx < len(configs) - 1:
+                fig.patches.extend([
+                    plt.Rectangle(
+                        (0, 1 - (row_spacing + 2.2) / n_rows),  # Use row_spacing for line positioning
+                        1,
+                        0.002,
+                        facecolor='black',
+                        transform=fig.transFigure,
+                        zorder=10,
+                        clip_on=False
+                    )
+                ])
     
-    plt.title('Average Performance Across All Configurations')
+    # Adjust spacing - different spacing within and between groups
+    plt.subplots_adjust(
+        hspace=0.05,     # Very tight spacing within groups
+        wspace=0.05,     # Keep minimal horizontal spacing
+        top=0.95,        # Keep top margin
+        bottom=0.05,     # Keep bottom margin
+        left=0.1,        # Keep left margin
+        right=0.95       # Keep right margin
+    )
+    plt.savefig(os.path.join(results_folder, 'method_comparison_grid.png'), 
+                bbox_inches='tight', dpi=300)
+    plt.close()
+
+def create_combined_heatmap(data_folder):
+    """Create a combined heatmap showing Civility and Efficiency for all configurations"""
+    test_folder = os.path.join(data_folder, "4_Performance_with_varying_agent_count_and_Resolution")
+    results_folder = os.path.join(test_folder, "_Results")
+    if not os.path.exists(results_folder):
+        os.makedirs(results_folder)
+    
+    # Dictionary to store data
+    data_by_resolution = {
+        100: {"helbing": [], "vision": []},
+        200: {"helbing": [], "vision": []},
+        300: {"helbing": [], "vision": []}
+    }
+    
+    # Collect data
+    files = os.listdir(test_folder)
+    for sim_folder in files:
+        data = load_data(os.path.join(test_folder, sim_folder, "data.csv"))
+        if data is not None:
+            data, config_lines = data
+            resolution = None
+            method = None
+            agent_count = None
+            
+            for line in config_lines:
+                if "Resolution:" in line:
+                    resolution = int(line.split("Resolution:")[1].strip())
+                elif "Agent Count:" in line:
+                    agent_count = int(line.split("Agent Count:")[1].strip())
+            
+            if sim_folder.startswith("Helbing"):
+                method = "helbing"
+            elif sim_folder.startswith("Vision"):
+                method = "vision"
+            
+            if resolution and method and agent_count:
+                data_by_resolution[resolution][method].append((agent_count, data))
+
+    # Create figure with 2x3 subplot grid (two metrics, three columns)
+    fig, axes = plt.subplots(2, 3, figsize=(24, 16))
+    
+    # Define the layout - now including difference column
+    layout = [
+        ('Civility', 'Helbing', axes[0,0], 'RdYlGn'),
+        ('Civility', 'Vision', axes[0,1], 'RdYlGn'),
+        ('Civility', 'Difference', axes[0,2], 'RdBu'),  # Red-Blue diverging colormap for difference
+        ('Efficiency', 'Helbing', axes[1,0], 'viridis'),
+        ('Efficiency', 'Vision', axes[1,1], 'viridis'),
+        ('Efficiency', 'Difference', axes[1,2], 'RdBu')
+    ]
+    
+    # Process each metric separately
+    for row, metric in enumerate(['Civility', 'Efficiency']):
+        # Prepare data
+        resolutions = [100, 200, 300]
+        agent_counts = sorted(list(set(x[0] for x in data_by_resolution[100]["helbing"])))
+        
+        # Create matrices for both methods
+        helbing_matrix = np.zeros((len(resolutions), len(agent_counts)))
+        vision_matrix = np.zeros((len(resolutions), len(agent_counts)))
+        
+        # Fill matrices
+        for i, res in enumerate(resolutions):
+            for j, ac in enumerate(agent_counts):
+                helbing_data = [d[1][metric].mean() 
+                              for d in data_by_resolution[res]["helbing"] 
+                              if d[0] == ac]
+                vision_data = [d[1][metric].mean() 
+                             for d in data_by_resolution[res]["vision"] 
+                             if d[0] == ac]
+                
+                if helbing_data:
+                    helbing_matrix[i, j] = np.mean(helbing_data)
+                if vision_data:
+                    vision_matrix[i, j] = np.mean(vision_data)
+        
+        # Calculate difference matrix
+        diff_matrix = helbing_matrix - vision_matrix
+        
+        # Create heatmaps
+        # Helbing
+        sns.heatmap(helbing_matrix,
+                   xticklabels=agent_counts,
+                   yticklabels=[f'{r}×{r}' for r in resolutions],
+                   cmap=layout[row*3][3],
+                   annot=True,
+                   fmt='.2f',
+                   ax=axes[row,0],
+                   cbar_kws={'label': metric})
+        axes[row,0].set_title(f'Helbing - {metric}')
+        axes[row,0].set_xlabel('Number of Agents')
+        axes[row,0].set_ylabel('Resolution')
+        
+        # Vision
+        sns.heatmap(vision_matrix,
+                   xticklabels=agent_counts,
+                   yticklabels=[f'{r}×{r}' for r in resolutions],
+                   cmap=layout[row*3+1][3],
+                   annot=True,
+                   fmt='.2f',
+                   ax=axes[row,1],
+                   cbar_kws={'label': metric})
+        axes[row,1].set_title(f'Vision - {metric}')
+        axes[row,1].set_xlabel('Number of Agents')
+        axes[row,1].set_ylabel('Resolution')
+        
+        # Difference
+        # Center the colormap around 0 for the difference plot
+        abs_max = max(abs(diff_matrix.min()), abs(diff_matrix.max()))
+        sns.heatmap(diff_matrix,
+                   xticklabels=agent_counts,
+                   yticklabels=[f'{r}×{r}' for r in resolutions],
+                   cmap='RdBu',
+                   annot=True,
+                   fmt='.2f',
+                   ax=axes[row,2],
+                   center=0,
+                   vmin=-abs_max,
+                   vmax=abs_max,
+                   cbar_kws={'label': 'Difference'})
+        axes[row,2].set_title(f'Difference (Helbing - Vision) - {metric}')
+        axes[row,2].set_xlabel('Number of Agents')
+        axes[row,2].set_ylabel('Resolution')
+
+    plt.suptitle('Method Comparison Across Metrics', y=1.02, fontsize=14)
+    plt.tight_layout()
+    plt.savefig(os.path.join(results_folder, 'combined_metrics_heatmap.png'), 
+                bbox_inches='tight', dpi=300)
+    plt.close()
+
+def create_performance_comparison(data_folder):
+    """Create a bar chart comparing time performance across all configurations"""
+    test_folder = os.path.join(data_folder, "4_Performance_with_varying_agent_count_and_Resolution")
+    results_folder = os.path.join(test_folder, "_Results")
+    
+    # Dictionary to store data
+    data_by_resolution = {
+        100: {"helbing": [], "vision": []},
+        200: {"helbing": [], "vision": []},
+        300: {"helbing": [], "vision": []}
+    }
+    
+    # Collect data (same as before)
+    files = os.listdir(test_folder)
+    for sim_folder in files:
+        data = load_data(os.path.join(test_folder, sim_folder, "data.csv"))
+        if data is not None:
+            data, config_lines = data
+            resolution = None
+            method = None
+            agent_count = None
+            
+            for line in config_lines:
+                if "Resolution:" in line:
+                    resolution = int(line.split("Resolution:")[1].strip())
+                elif "Agent Count:" in line:
+                    agent_count = int(line.split("Agent Count:")[1].strip())
+            
+            if sim_folder.startswith("Helbing"):
+                method = "helbing"
+            elif sim_folder.startswith("Vision"):
+                method = "vision"
+            
+            if resolution and method and agent_count:
+                data_by_resolution[resolution][method].append((agent_count, data))
+
+    # Create bar chart
+    plt.figure(figsize=(15, 6))
+    
+    # Get all agent counts
+    agent_counts = sorted(list(set(
+        ac for res in data_by_resolution.values() 
+        for method in res.values() 
+        for ac, _ in method
+    )))
+    
+    # Setup x-axis positions
+    n_groups = len(agent_counts)
+    n_bars = 6  # 3 resolutions × 2 methods
+    bar_width = 0.8 / n_bars
+    
+    # Colors for each resolution
+    colors = {'helbing': ['#1f77b4', '#2ca02c', '#ff7f0e'],  # Blue, Green, Orange
+             'vision': ['#17becf', '#98df8a', '#ffbb78']}    # Light versions
+    
+    # Plot bars
+    for i, agent_count in enumerate(agent_counts):
+        x_center = i
+        
+        for j, (resolution, color_idx) in enumerate(zip([100, 200, 300], range(3))):
+            for k, method in enumerate(['helbing', 'vision']):
+                # Calculate bar position
+                x_pos = x_center - 0.4 + (j*2 + k) * bar_width
+                
+                # Get data and divide by 100 to get actual time per step
+                times = [data['TimeForInterval'].mean() / 100.0  # Divide by 100
+                        for ac, data in data_by_resolution[resolution][method] 
+                        if ac == agent_count]
+                
+                if times:
+                    mean_time = np.mean(times)
+                    std_time = np.std(times)
+                    
+                    plt.bar(x_pos, mean_time, bar_width,
+                           yerr=std_time, capsize=3,
+                           color=colors[method][color_idx],
+                           label=f'{resolution}×{resolution} {method.capitalize()}'
+                           if i == 0 else None)
+
     plt.xlabel('Number of Agents')
-    plt.ylabel('Average Time per Step (seconds)')
-    plt.xticks(x + width * 2, agent_counts)
-    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+    plt.ylabel('Time per Step (seconds)')  # Updated label
+    plt.title('Performance Comparison Across All Configurations')
+    plt.xticks(range(len(agent_counts)), agent_counts)
+    plt.legend(ncol=2, bbox_to_anchor=(1.05, 1), loc='upper left')
     plt.grid(True, alpha=0.3)
+    
     plt.tight_layout()
-    plt.savefig(os.path.join(results_folder, 'performance_combined_bar.png'), 
+    plt.savefig(os.path.join(results_folder, 'performance_comparison.png'),
                 bbox_inches='tight', dpi=300)
     plt.close()
+
+def create_combined_time_series(data_folder):
+    """Create combined time series plots for each metric, stacked by resolution"""
+    test_folder = os.path.join(data_folder, "4_Performance_with_varying_agent_count_and_Resolution")
+    results_folder = os.path.join(test_folder, "_Results")
+    if not os.path.exists(results_folder):
+        os.makedirs(results_folder)
+    
+    # Dictionary to store data
+    data_by_resolution = {
+        100: {"helbing": [], "vision": []},
+        200: {"helbing": [], "vision": []},
+        300: {"helbing": [], "vision": []}
+    }
+    
+    # Collect data
+    files = os.listdir(test_folder)
+    for sim_folder in files:
+        data = load_data(os.path.join(test_folder, sim_folder, "data.csv"))
+        if data is not None:
+            data, config_lines = data
+            resolution = None
+            method = None
+            agent_count = None
+            
+            for line in config_lines:
+                if "Resolution:" in line:
+                    resolution = int(line.split("Resolution:")[1].strip())
+                elif "Agent Count:" in line:
+                    agent_count = int(line.split("Agent Count:")[1].strip())
+            
+            if sim_folder.startswith("Helbing"):
+                method = "helbing"
+            elif sim_folder.startswith("Vision"):
+                method = "vision"
+            
+            if resolution and method and agent_count:
+                data_by_resolution[resolution][method].append((agent_count, data))
+    
+    # Create the plots
+    metrics = ['Efficiency', 'Civility', 'TimeForInterval']
+    metric_titles = ['Efficiency', 'Civility', 'Time per Step (seconds)']
+    
+    for metric, title in zip(metrics, metric_titles):
+        # Create figure with 3 subplots stacked vertically
+        fig, axes = plt.subplots(3, 1, figsize=(15, 20))
+        
+        for res_idx, resolution in enumerate([100, 200, 300]):
+            ax = axes[res_idx]
+            
+            for method in ["helbing", "vision"]:
+                data_by_resolution[resolution][method].sort(key=lambda x: x[0])
+                
+                # Group data by agent count
+                agent_groups = {}
+                for agent_count, data in data_by_resolution[resolution][method]:
+                    if agent_count not in agent_groups:
+                        agent_groups[agent_count] = []
+                    agent_groups[agent_count].append(data)
+                
+                # Plot each agent count
+                for agent_count, group_data in agent_groups.items():
+                    if metric == 'TimeForInterval':
+                        # Divide time values by 100 to get actual time per step
+                        mean_values = np.mean([data[metric] / 100.0 for data in group_data], axis=0)
+                        std_values = np.std([data[metric] / 100.0 for data in group_data], axis=0)
+                    else:
+                        # Keep other metrics as they are
+                        mean_values = np.mean([data[metric] for data in group_data], axis=0)
+                        std_values = np.std([data[metric] for data in group_data], axis=0)
+                    
+                    steps = np.arange(len(mean_values)) * 100
+                    
+                    ax.plot(steps, mean_values, 
+                           label=f"{'Helbing' if method == 'helbing' else 'Vision'}-based ({agent_count} agents)",
+                           marker='o', markersize=4)
+                    ax.fill_between(steps, 
+                                  mean_values - std_values, 
+                                  mean_values + std_values, 
+                                  alpha=0.2)
+            
+            ax.set_title(f'Resolution {resolution}×{resolution}')
+            ax.set_xlabel('Simulation Step')
+            ax.set_ylabel('Time per Step (seconds)' if metric == 'TimeForInterval' else title)
+            ax.grid(True, alpha=0.3)
+            ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+        
+        plt.suptitle(f'{title} Over Time', y=0.95, fontsize=14)
+        plt.tight_layout()
+        plt.savefig(os.path.join(results_folder, f'{metric.lower()}_combined_time_series.png'), 
+                    bbox_inches='tight', dpi=300)
+        plt.close()
 
 if __name__ == "__main__":
     # Look for data in Unity's default location
@@ -795,7 +1172,7 @@ if __name__ == "__main__":
         print(f"Creating data folder: {os.path.abspath(data_folder)}")
         os.makedirs(data_folder)
     
-    #plot_test1(data_folder)
-    #plot_test2(data_folder)
-    #plot_test3(data_folder)
-    plot_test4(data_folder) 
+    create_screenshot_grid(data_folder)
+    create_combined_heatmap(data_folder)
+    create_performance_comparison(data_folder)
+    create_combined_time_series(data_folder) 
