@@ -26,6 +26,10 @@ public class AgentSpawner : MonoBehaviour
     public List<GameObject> goalPortals = new List<GameObject>();
     public List<GameObject> dualPortals = new List<GameObject>(); // Both spawn and goal
     
+    [Header("Spawn Pattern")]
+    [Tooltip("If true, agents will spawn in a cyclical pattern rather than randomly")]
+    public bool cyclicalSpawns = false;
+    
     [Header("Portal Appearance")]
     public Color spawnColor = Color.blue;
     public Color goalColor = Color.green;
@@ -38,12 +42,20 @@ public class AgentSpawner : MonoBehaviour
     
     // Track which portal each agent came from
     private Dictionary<Agent, GameObject> agentOrigins = new Dictionary<Agent, GameObject>();
-    private float nextSpawnTime = 0f;
     private int activeAgentCount = 0;
     private int colorIndex = 0;
     
+    // Indices for cyclical spawning
+    private int currentSpawnIndex = 0;
+    private int currentGoalIndex = 0;
+    
     // Reference to simulator
     private Simulator simulator;
+
+    // Add these fields to track agent assignments
+    private Dictionary<Agent, int> agentSpawnIndices = new Dictionary<Agent, int>();
+    private Dictionary<Agent, int> agentGoalIndices = new Dictionary<Agent, int>();
+    private int nextSpawnIndex = 0;
 
     void Start()
     {
@@ -58,27 +70,10 @@ public class AgentSpawner : MonoBehaviour
         // Set up portal colors
         SetupPortalColors();
         
-        // Spawn all agents at start
-        for (int i = 0; i < agentAmount; i++)
-        {
-            SpawnNewAgent();
-        }
     }
     
     void Update()
     {
-        // Check agent colors periodically
-        if (Time.frameCount % 30 == 0)
-        {
-            foreach (var agent in simulator.agents)
-            {
-                if (agent != null)
-                {
-                    EnsureAgentColor(agent);
-                }
-            }
-        }
-        
         // Check if any agents have reached their goals
         CheckAllAgentGoals();
     }
@@ -145,15 +140,34 @@ public class AgentSpawner : MonoBehaviour
         if (simulator.agents.Count >= agentAmount)
             return null;
             
-        // Choose a random spawn portal
-        List<GameObject> allSpawnPoints = new List<GameObject>();
-        allSpawnPoints.AddRange(spawnPortals);
-        allSpawnPoints.AddRange(dualPortals);
+        GameObject spawnPoint;
         
-        if (allSpawnPoints.Count == 0)
-            return null;
+        if (cyclicalSpawns)
+        {
+            // Get all available spawn points
+            List<GameObject> allSpawnPoints = new List<GameObject>();
+            allSpawnPoints.AddRange(spawnPortals);
+            allSpawnPoints.AddRange(dualPortals);
             
-        GameObject spawnPoint = allSpawnPoints[Random.Range(0, allSpawnPoints.Count)];
+            if (allSpawnPoints.Count == 0)
+                return null;
+                
+            // Use the current spawn index (cycling through available spawn points)
+            spawnPoint = allSpawnPoints[currentSpawnIndex % allSpawnPoints.Count];
+            currentSpawnIndex++;
+        }
+        else
+        {
+            // Choose a random spawn portal (original behavior)
+            List<GameObject> allSpawnPoints = new List<GameObject>();
+            allSpawnPoints.AddRange(spawnPortals);
+            allSpawnPoints.AddRange(dualPortals);
+            
+            if (allSpawnPoints.Count == 0)
+                return null;
+                
+            spawnPoint = allSpawnPoints[Random.Range(0, allSpawnPoints.Count)];
+        }
         
         // Get the exact spawn position (center of the spawner)
         Vector3 spawnPos = spawnPoint.transform.position + Vector3.up * spawnHeight;
@@ -190,21 +204,28 @@ public class AgentSpawner : MonoBehaviour
             return;
         }
 
-        // Log Current Goal
-        Vector3 oldGoal = agent.goalPosition;
-
-        // Simple logic: pick a random portal from possible destinations
-        GameObject newGoalPortalGO = null;
-        int attempts = 0;
-        do
+        GameObject newGoalPortalGO;
+        
+        if (cyclicalSpawns)
         {
-            int randomIndex = Random.Range(0, possibleDestinations.Count);
-            newGoalPortalGO = possibleDestinations[randomIndex];
-            attempts++;
-            // Ensure the selected portal is not null before accessing its position
-            if (newGoalPortalGO == null) continue;
+            // Use the current goal index (cycling through available goals)
+            newGoalPortalGO = possibleDestinations[currentGoalIndex % possibleDestinations.Count];
+            currentGoalIndex++;
+        }
+        else
+        {
+            // Simple logic: pick a random portal from possible destinations (original behavior)
+            int attempts = 0;
+            do
+            {
+                int randomIndex = Random.Range(0, possibleDestinations.Count);
+                newGoalPortalGO = possibleDestinations[randomIndex];
+                attempts++;
+                // Ensure the selected portal is not null before accessing its position
+                if (newGoalPortalGO == null) continue;
 
-        } while (Vector3.Distance(newGoalPortalGO.transform.position, agent.goalPosition) < 0.1f && attempts < 10 && possibleDestinations.Count > 1); // Avoid infinite loop
+            } while (Vector3.Distance(newGoalPortalGO.transform.position, agent.goalPosition) < 0.1f && attempts < 10 && possibleDestinations.Count > 1); // Avoid infinite loop
+        }
 
         if (newGoalPortalGO != null)
         {
@@ -280,15 +301,33 @@ public class AgentSpawner : MonoBehaviour
     // Helper method to get a random spawn portal
     private GameObject GetRandomSpawnPortal()
     {
-        // Choose a random spawn portal
-        List<GameObject> allSpawnPoints = new List<GameObject>();
-        allSpawnPoints.AddRange(spawnPortals);
-        allSpawnPoints.AddRange(dualPortals);
-        
-        if (allSpawnPoints.Count == 0)
-            return null;
+        if (cyclicalSpawns)
+        {
+            // Get all available spawn points
+            List<GameObject> allSpawnPoints = new List<GameObject>();
+            allSpawnPoints.AddRange(spawnPortals);
+            allSpawnPoints.AddRange(dualPortals);
             
-        return allSpawnPoints[Random.Range(0, allSpawnPoints.Count)];
+            if (allSpawnPoints.Count == 0)
+                return null;
+                
+            // Use the current spawn index (cycling through available spawn points)
+            GameObject spawnPoint = allSpawnPoints[currentSpawnIndex % allSpawnPoints.Count];
+            currentSpawnIndex++;
+            return spawnPoint;
+        }
+        else
+        {
+            // Choose a random spawn portal (original behavior)
+            List<GameObject> allSpawnPoints = new List<GameObject>();
+            allSpawnPoints.AddRange(spawnPortals);
+            allSpawnPoints.AddRange(dualPortals);
+            
+            if (allSpawnPoints.Count == 0)
+                return null;
+                
+            return allSpawnPoints[Random.Range(0, allSpawnPoints.Count)];
+        }
     }
 
     // Update the SpawnAgents method to spawn agents with delay
@@ -299,8 +338,11 @@ public class AgentSpawner : MonoBehaviour
         // If we already have agents, don't spawn more
         if (simulator.agents.Count >= agentAmount)
         {
+            Debug.Log($"Already have {simulator.agents.Count} agents, not spawning more");
             return simulator.agents;
         }
+        
+        Debug.Log($"Starting to spawn {agentAmount} agents with cyclicalSpawns={cyclicalSpawns}");
         
         // Start a coroutine to spawn agents with delay
         StartCoroutine(SpawnAgentsWithDelay(agents));
@@ -308,62 +350,150 @@ public class AgentSpawner : MonoBehaviour
         return agents;
     }
 
-    // Coroutine to spawn agents with delay
+    // Coroutine to spawn agents with delay - fixed for even distribution
     private IEnumerator SpawnAgentsWithDelay(List<Agent> agentsList)
     {
-        // Get all available spawn points
+        Debug.Log($"Starting to spawn {agentAmount} agents with cyclicalSpawns={cyclicalSpawns}");
+        
+        // Prepare spawn and goal points
         List<GameObject> spawnPoints = new List<GameObject>();
         spawnPoints.AddRange(spawnPortals);
         spawnPoints.AddRange(dualPortals);
         
-        if (spawnPoints.Count == 0)
+        List<GameObject> goalPoints = new List<GameObject>();
+        goalPoints.AddRange(goalPortals);
+        goalPoints.AddRange(dualPortals);
+        
+        // Check if we have valid spawn and goal points
+        if (spawnPoints.Count == 0 || goalPoints.Count == 0)
         {
-            Debug.LogError("No spawn points available!");
+            Debug.LogError("No spawn or goal points available!");
             yield break;
         }
         
-        // Calculate how many more agents we need
-        int agentsToSpawn = agentAmount - simulator.agents.Count;
+        // Reset indices for a fresh start
+        nextSpawnIndex = 0;
         
-        // Spawn the specified number of agents
-        for (int i = 0; i < agentsToSpawn; i++)
+        int agentsSpawned = 0;
+        
+        if (cyclicalSpawns)
         {
-            // Choose a random spawn point
-            GameObject spawnPoint = spawnPoints[Random.Range(0, spawnPoints.Count)];
+            // Calculate how many complete cycles we need
+            int spawnPointCount = spawnPoints.Count;
+            int goalPointCount = goalPoints.Count;
             
-            // Get the exact spawn position (center of the spawner)
-            Vector3 spawnPos = spawnPoint.transform.position + Vector3.up * spawnHeight;
-            
-            // Spawn the agent
-            Agent newAgent = SpawnSingleAgent(spawnPos);
-            if (newAgent != null)
+            // Create a more structured distribution pattern
+            while (agentsSpawned < agentAmount)
             {
-                // Register the agent with the simulator
-                simulator.agents.Add(newAgent);
+                // Get current spawn point - cycle through all spawn points first
+                int spawnIdx = agentsSpawned % spawnPointCount;
+                GameObject spawnPoint = spawnPoints[spawnIdx];
                 
-                // Track where this agent came from
-                agentOrigins[newAgent] = spawnPoint;
+                // For each spawn point, cycle through goals
+                int goalIdx = (agentsSpawned / spawnPointCount) % goalPointCount;
+                GameObject goalPoint = goalPoints[goalIdx];
                 
-                // Assign a goal
-                AssignNewGoal(newAgent);
-                
-                // Set the agent's initial direction toward the goal
-                SetAgentDirectionTowardGoal(newAgent);
-                
-                activeAgentCount++;
-                agentsList.Add(newAgent);
-                
-                // Notify the ScriptManager that we've added an agent
-                ScriptManager scriptManager = FindObjectOfType<ScriptManager>();
-                if (scriptManager != null)
+                // Skip if spawn and goal are the same
+                if (spawnPoint == goalPoint)
                 {
-                    scriptManager.OnAgentSpawned(newAgent);
+                    // Try the next goal
+                    goalIdx = (goalIdx + 1) % goalPointCount;
+                    goalPoint = goalPoints[goalIdx];
+                    
+                    // If still the same, skip this combination
+                    if (spawnPoint == goalPoint && goalPointCount > 1)
+                    {
+                        agentsSpawned++;
+                        continue;
+                    }
                 }
+                
+                // Get spawn position
+                Vector3 spawnPos = spawnPoint.transform.position + Vector3.up * spawnHeight;
+                
+                // Spawn the agent
+                Agent newAgent = SpawnSingleAgent(spawnPos);
+                if (newAgent != null)
+                {
+                    // Set goal position
+                    newAgent.goalPosition = goalPoint.transform.position;
+                    
+                    // Register with simulator
+                    simulator.agents.Add(newAgent);
+                    
+                    // Track origin and assignments
+                    agentOrigins[newAgent] = spawnPoint;
+                    agentSpawnIndices[newAgent] = spawnIdx;
+                    agentGoalIndices[newAgent] = goalIdx;
+                    
+                    // Set direction toward goal
+                    SetAgentDirectionTowardGoal(newAgent);
+                    
+                    // Update counters
+                    activeAgentCount++;
+                    agentsList.Add(newAgent);
+                    
+                }
+                
+                // Wait before spawning next agent
+                yield return new WaitForSeconds(0.1f);
+                
+                // Increment for next agent
+                agentsSpawned++;
+                
+                // If we've reached the agent limit, stop spawning
+                if (agentsSpawned >= agentAmount)
+                    break;
             }
             
-            // Add a delay before spawning the next agent
-            yield return new WaitForSeconds(0.2f);
+            // Update the next indices for HandleAgentReachedGoal to use
+            nextSpawnIndex = 0;
         }
+        else
+        {
+            // Original random spawning behavior
+            while (agentsSpawned < agentAmount)
+            {
+                GameObject spawnPoint = spawnPoints[Random.Range(0, spawnPoints.Count)];
+                GameObject goalPoint;
+                
+                // Make sure goal is different from spawn
+                do {
+                    goalPoint = goalPoints[Random.Range(0, goalPoints.Count)];
+                } while (goalPoint == spawnPoint && goalPoints.Count > 1);
+                
+                // Get spawn position
+                Vector3 spawnPos = spawnPoint.transform.position + Vector3.up * spawnHeight;
+                
+                // Spawn the agent
+                Agent newAgent = SpawnSingleAgent(spawnPos);
+                if (newAgent != null)
+                {
+                    // Set goal position
+                    newAgent.goalPosition = goalPoint.transform.position;
+                    
+                    // Register with simulator
+                    simulator.agents.Add(newAgent);
+                    
+                    // Track origin
+                    agentOrigins[newAgent] = spawnPoint;
+                    
+                    // Set direction toward goal
+                    SetAgentDirectionTowardGoal(newAgent);
+                    
+                    // Update counters
+                    activeAgentCount++;
+                    agentsSpawned++;
+                    agentsList.Add(newAgent);
+                    
+                }
+                
+                // Wait before spawning next agent
+                yield return new WaitForSeconds(0.1f);
+            }
+        }
+        
+        Debug.Log($"Finished spawning {agentsSpawned} agents");
     }
 
     // Add this method to set the agent's initial direction toward its goal
@@ -411,13 +541,61 @@ public class AgentSpawner : MonoBehaviour
         }
     }
 
-    // Update this method to use exact portal position
+    // Update this method to use exact portal position and maintain cyclical pattern
     public void HandleAgentReachedGoal(Agent agent)
     {
         if (agent == null) return;
         
-        // Choose a new spawn point
-        GameObject spawnPoint = GetRandomSpawnPortal();
+        // Get all available spawn and goal points
+        List<GameObject> allSpawnPoints = new List<GameObject>();
+        allSpawnPoints.AddRange(spawnPortals);
+        allSpawnPoints.AddRange(dualPortals);
+        
+        List<GameObject> allGoalPoints = new List<GameObject>();
+        allGoalPoints.AddRange(goalPortals);
+        allGoalPoints.AddRange(dualPortals);
+        
+        if (allSpawnPoints.Count == 0 || allGoalPoints.Count == 0)
+            return;
+        
+        GameObject spawnPoint;
+        GameObject goalPoint;
+        
+        if (cyclicalSpawns)
+        {
+            // Get the next spawn point in the cycle - cycle through all spawn points first
+            int spawnIdx = nextSpawnIndex % allSpawnPoints.Count;
+            spawnPoint = allSpawnPoints[spawnIdx];
+            
+            // For each spawn point, cycle through goals
+            int goalIdx = (nextSpawnIndex / allSpawnPoints.Count) % allGoalPoints.Count;
+            goalPoint = allGoalPoints[goalIdx];
+            
+            // Skip if spawn and goal are the same
+            if (spawnPoint == goalPoint && allGoalPoints.Count > 1)
+            {
+                goalIdx = (goalIdx + 1) % allGoalPoints.Count;
+                goalPoint = allGoalPoints[goalIdx];
+            }
+            
+            // Increment for next agent
+            nextSpawnIndex++;
+            
+            // Store the indices for this agent
+            agentSpawnIndices[agent] = spawnIdx;
+            agentGoalIndices[agent] = goalIdx;
+        }
+        else
+        {
+            // Random assignment
+            spawnPoint = GetRandomSpawnPortal();
+            
+            // Choose a random goal that's different from the spawn
+            do {
+                goalPoint = allGoalPoints[Random.Range(0, allGoalPoints.Count)];
+            } while (goalPoint == spawnPoint && allGoalPoints.Count > 1);
+        }
+        
         if (spawnPoint == null) return;
         
         // Get the exact spawn position (center of the spawner)
@@ -436,8 +614,8 @@ public class AgentSpawner : MonoBehaviour
         // Update the agent's origin
         agentOrigins[agent] = spawnPoint;
         
-        // Assign a new goal
-        AssignNewGoal(agent);
+        // Set the goal position
+        agent.goalPosition = goalPoint.transform.position;
         
         // Reset the agent's velocity toward the new goal
         SetAgentDirectionTowardGoal(agent);

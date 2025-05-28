@@ -46,9 +46,6 @@ public class Simulator : MonoBehaviour
     [Tooltip("Time for agents to adjust to desired velocity")]
     public float relaxationTime_tau = 1f;
 
-    [Tooltip("Distance at which agents are considered to have reached their goal")]
-    public float goalReachedThreshold = 0.5f;
-
     [Header("Movement Settings")]
     [Tooltip("Select the method agents use to follow trails.")]
     public PathFollowingMethod currentPathFollowingMethod = PathFollowingMethod.HelbingsMethod; // Default method
@@ -76,17 +73,20 @@ public class Simulator : MonoBehaviour
 
     [Header("Trail Settings")]
     [Tooltip("Time scale for trail decay in seconds (T in equation 5) - higher values mean slower decay")]
-    [Range(0.0f, 10.0f)]
+    [Range(0.0f, 100.0f)]
     public float trailRecoveryRate_T = 0.05f; // T in equation (5)
 
-    [Header("Comfort Map Settings")]
+    [Tooltip("Intensity of each footstep (I) - between 0 and 1")]
+    [Range(0.0f, 100.0f)]
+    public float footstepIntensity_I = 0.8f; // I in equation (5)
+    
+    [Header("Comfort Map Settings")]    
     [Tooltip("Maximum comfort level a trail can reach (Gmax)")]
+    
     public float maxComfortLevel = 20f; // Gmax in equation (5)
 
-    [Tooltip("Intensity of each footstep (I) - between 0 and 1")]
-    [Range(0.0f, 1.0f)]
-    public float footstepIntensity_I = 0.8f; // I in equation (5)
-
+    
+    
     // Color gradient for comfort visualization
     public Color comfortColor0 = Color.red;     // 0
     public Color comfortColor1 = Color.yellow;  // ~Gmax * 0.2
@@ -94,7 +94,7 @@ public class Simulator : MonoBehaviour
     public Color comfortColor3 = Color.cyan;    // ~Gmax * 0.6
     public Color comfortColor4 = Color.blue;    // ~Gmax * 0.8
     public Color comfortColor5 = Color.magenta; // ~Gmax * 0.9
-    public Color comfortColor6 = Color.white;   // Gmax
+    public Color comfortColor6 = new Color(1.0f, 0.0f, 0.5f, 1f);   // Gmax
 
     // Comfort map data
     public float[,] comfortMap; // Stores comfort values from 0 to Gmax
@@ -118,12 +118,15 @@ public class Simulator : MonoBehaviour
     private bool[,] hasTrailMap;
     private bool[,] changedPixels;
     private List<Vector2Int> changedPixelsList = new List<Vector2Int>();
-    private HashSet<Vector2Int> steppedCellsThisFrame = new HashSet<Vector2Int>();
+    private Dictionary<Vector2Int, int> steppedCellsThisFrame = new Dictionary<Vector2Int, int>();
     private GameObject plane;
     private Vector2 planeSize = new Vector2(0, 0);
     
     public List<Agent> agents = new List<Agent>();
 
+    private Texture2D pathTexture;
+    private RenderTexture pathRenderTexture;
+    private int frameCount = 0;
 
     void Awake()
     {
@@ -194,6 +197,7 @@ public class Simulator : MonoBehaviour
     void FixedUpdate()
     {
         // Clear the stepped cells set at the beginning of each frame
+        frameCount++;
         steppedCellsThisFrame.Clear();
         changedPixelsList.Clear();
         
@@ -206,9 +210,6 @@ public class Simulator : MonoBehaviour
             }
         }
         
-        // Get the goal reached distance
-        float goalReachedDistance = agentSpawner != null ? agentSpawner.goalReachedDistance : goalReachedThreshold;
-        
         // Update each agent
         for (int i = agents.Count - 1; i >= 0; i--)
         {
@@ -217,7 +218,7 @@ public class Simulator : MonoBehaviour
             
             // Check if agent has reached its goal
             float distanceToGoal = Vector3.Distance(agent.transform.position, agent.goalPosition);
-            if (distanceToGoal < goalReachedDistance)
+            if (distanceToGoal < agentSpawner.goalReachedDistance)
             {
                 // Let the AgentSpawner handle the agent reaching its goal
                 agentSpawner.HandleAgentReachedGoal(agent);
@@ -526,7 +527,6 @@ public class Simulator : MonoBehaviour
              if (trailPositionBuffer != null) trailPositionBuffer.Release();
              // Buffer stores Vector2 (float2) - position
              trailPositionBuffer = new ComputeBuffer(agentCount, sizeof(float) * 2);
-             Debug.Log($"Compute Shader Position Buffer created/resized for {agentCount} agents.");
         }
     }
 
@@ -543,17 +543,7 @@ public class Simulator : MonoBehaviour
 
     void OnDestroy()
     {
-        // Release compute resources
-        if (trailTexture != null)
-        {
-            trailTexture.Release();
-            trailTexture = null;
-        }
-        if (trailPositionBuffer != null)
-        {
-            trailPositionBuffer.Release();
-            trailPositionBuffer = null;
-        }
+        CleanupResources();
     }
 
     void OnDisable()
@@ -571,48 +561,49 @@ public class Simulator : MonoBehaviour
             return;
         }
 
-        // Create a texture to hold the trail colors
-        Texture2D colorTexture = new Texture2D(textureResolution, textureResolution, TextureFormat.RGBA32, false);
-        colorTexture.SetPixels(trailColors);
+        // Create a texture to hold the trail colors and comfort values
+        Texture2D colorTexture = new Texture2D(textureResolution, textureResolution, TextureFormat.RGBAFloat, false);
+        Color[] colors = new Color[textureResolution * textureResolution];
+        
+        // Store comfort values in the alpha channel
+        for (int y = 0; y < textureResolution; y++)
+        {
+            for (int x = 0; x < textureResolution; x++)
+            {
+                int index = y * textureResolution + x;
+                float comfort = comfortMap[x, y];
+                colors[index] = new Color(0, 0, 0, comfort / maxComfortLevel); // Store normalized comfort in alpha
+            }
+        }
+        
+        colorTexture.SetPixels(colors);
         colorTexture.Apply();
 
         // Set up the compute shader
         int kernelHandle = trailComputeShader.FindKernel("CSMain");
         
-        // Create a render texture for the compute shader output
-        RenderTexture outputTexture = new RenderTexture(textureResolution, textureResolution, 0);
-        outputTexture.enableRandomWrite = true;
-        outputTexture.Create();
-        
-        trailComputeShader.SetTexture(kernelHandle, "Result", outputTexture);
-        trailComputeShader.SetTexture(kernelHandle, "ColorMap", colorTexture);
-        trailComputeShader.SetFloat("trailWidth", trailWidth);
+        // Set parameters
         trailComputeShader.SetInt("textureResolution", textureResolution);
+        trailComputeShader.SetFloat("maxComfortLevel", maxComfortLevel);
         
-        // Prepare trail positions
-        Vector2[] trailPositions = new Vector2[agents.Count];
-        for (int i = 0; i < agents.Count; i++)
-        {
-            if (agents[i] != null)
-            {
-                trailPositions[i] = WorldToTextureCoord(agents[i].transform.position);
-            }
-            else
-            {
-                trailPositions[i] = Vector2.zero; // Default for null agents
-            }
-        }
-        trailPositionBuffer.SetData(trailPositions);
+        // Set comfort colors
+        trailComputeShader.SetVector("comfortColor0", comfortColor0);
+        trailComputeShader.SetVector("comfortColor1", comfortColor1);
+        trailComputeShader.SetVector("comfortColor2", comfortColor2);
+        trailComputeShader.SetVector("comfortColor3", comfortColor3);
+        trailComputeShader.SetVector("comfortColor4", comfortColor4);
+        trailComputeShader.SetVector("comfortColor5", comfortColor5);
+        trailComputeShader.SetVector("comfortColor6", comfortColor6);
+        
+        // Set textures
+        trailComputeShader.SetTexture(kernelHandle, "Result", trailTexture);
+        trailComputeShader.SetTexture(kernelHandle, "ColorMap", colorTexture);
 
-        // Set the buffer
-        trailComputeShader.SetBuffer(kernelHandle, "trailPositions", trailPositionBuffer);
-
-        // Dispatch the compute shader
+        // Dispatch the shader
         trailComputeShader.Dispatch(kernelHandle, Mathf.CeilToInt(textureResolution / 8.0f), Mathf.CeilToInt(textureResolution / 8.0f), 1);
 
         // Clean up
         Destroy(colorTexture);
-        Destroy(outputTexture);
     }
 
     private void UpdateComfortMapVisualization()
@@ -660,37 +651,36 @@ public class Simulator : MonoBehaviour
     private void UpdateComfortMap()
     {
         float deltaTime = Time.fixedDeltaTime;
-        
-        // Process stepped cells first (usually much fewer than the entire grid)
-        foreach (Vector2Int cell in steppedCellsThisFrame)
+        float highestG = 0;
+        for (int x = 0; x < textureResolution; x++)
         {
-            int x = cell.x;
-            int y = cell.y;
-            
-            if (x < 0 || x >= textureResolution || y < 0 || y >= textureResolution)
-                continue;
-            
-            float G = comfortMap[x, y];
-            
-            // Implement equation (5) from the paper:
-            // ∂G(~r, t)/∂t = -G(~r, t)/T(~r) + I(~r)(1 - G(~r, t)/Gmax(~r))∑δ(~r - ~ri)
-            
-            // Calculate saturation factor: (1 - G/Gmax)
-            float saturationFactor = (maxComfortLevel > 0.001f) ? (1.0f - G / maxComfortLevel) : 0.0f;
-            saturationFactor = Mathf.Max(0f, saturationFactor); // Ensure non-negative
-            
-            // Calculate comfort increase from footsteps: I * saturationFactor
-            // The sum of delta functions is implicitly 1 here since we're only processing cells with footsteps
-            float comfortIncrease = footstepIntensity_I * saturationFactor;
-            
-            // Update comfort value
-            float newG = G + comfortIncrease;
-            newG = Mathf.Min(newG, maxComfortLevel); // Cap at maxComfortLevel
-            
-            if (Mathf.Abs(newG - G) > 0.001f)
+            for (int y = 0; y < textureResolution; y++)
             {
+                float G = comfortMap[x, y];
+                float dGdt = 0;
+                
+                float regeneration = -(G / trailRecoveryRate_T);
+                dGdt += regeneration;
+                
+                Vector2Int cell = new Vector2Int(x, y);
+                if (steppedCellsThisFrame.ContainsKey(cell))
+                {
+                    float saturationFactor = (1.0f - (G / maxComfortLevel));
+                    
+                    float reinforcement = footstepIntensity_I * saturationFactor * steppedCellsThisFrame[cell];
+                    dGdt += reinforcement;
+                }
+                
+                dGdt *= deltaTime;
+                float newG = G + dGdt;
+                newG = Mathf.Max(0f, newG);
+                newG = Mathf.Min(newG, maxComfortLevel);
+                if (newG > highestG)
+                {
+                    highestG = newG;
+                }   
+                    
                 comfortMap[x, y] = newG;
-                // Mark as changed for visualization update
                 if (!changedPixels[x, y])
                 {
                     changedPixels[x, y] = true;
@@ -698,36 +688,8 @@ public class Simulator : MonoBehaviour
                 }
             }
         }
+        steppedCellsThisFrame.Clear();
         
-        // Process decay for ALL cells every frame
-        for (int x = 0; x < textureResolution; x++)
-        {
-            for (int y = 0; y < textureResolution; y++)
-            {
-                float G = comfortMap[x, y];
-                if (G > 0.001f)
-                {
-                    // Calculate decay: -G/T
-                    float decayAmount = (G / trailRecoveryRate_T) * deltaTime;
-                    
-                    // Update comfort value
-                    float newG = Mathf.Max(0f, G - decayAmount);
-                    
-                    if (Mathf.Abs(newG - G) > 0.001f)
-                    {
-                        comfortMap[x, y] = newG;
-                        // Mark as changed for visualization update
-                        if (!changedPixels[x, y])
-                        {
-                            changedPixels[x, y] = true;
-                            changedPixelsList.Add(new Vector2Int(x, y));
-                        }
-                    }
-                }
-            }
-        }
-        
-        // Update visualization every frame
         if (changedPixelsList.Count > 0)
         {
             forceTextureUpdate = true;
@@ -975,9 +937,12 @@ public class Simulator : MonoBehaviour
                 // Check if coordinates are valid
                 if (x >= 0 && x < textureResolution && y >= 0 && y < textureResolution)
                 {
-                    // Add to the set of cells stepped on this frame
-                    steppedCellsThisFrame.Add(new Vector2Int(x, y));
-                   
+                    Vector2Int cell = new Vector2Int(x, y);
+                    // Increment the step count for this cell
+                    if (steppedCellsThisFrame.ContainsKey(cell))
+                        steppedCellsThisFrame[cell]++;
+                    else
+                        steppedCellsThisFrame[cell] = 1;
                 }
             }
         }
@@ -1055,8 +1020,7 @@ public class Simulator : MonoBehaviour
     // Add this method to the Simulator class
     public void StartSimulation()
     {
-        // This method is called by ScriptManager to start the simulation
-        Debug.Log("Simulation started with " + agents.Count + " agents");
+
         
         // Initialize any simulation parameters if needed
         
@@ -1134,6 +1098,179 @@ public class Simulator : MonoBehaviour
         
         // Initialize agent's velocity
         InitializeAgentVelocity(agent);
+    }
+
+    public void InitializeTextures()
+    {
+        // Clean up existing resources first
+        CleanupResources();
+
+        // Create new textures with current resolution
+        pathTexture = new Texture2D(textureResolution, textureResolution, TextureFormat.RGBAFloat, false);
+        pathTexture.filterMode = FilterMode.Bilinear;
+        pathTexture.wrapMode = TextureWrapMode.Clamp;
+
+        pathRenderTexture = new RenderTexture(textureResolution, textureResolution, 0, RenderTextureFormat.ARGBFloat);
+        pathRenderTexture.filterMode = FilterMode.Bilinear;
+        pathRenderTexture.wrapMode = TextureWrapMode.Clamp;
+        pathRenderTexture.enableRandomWrite = true;
+        pathRenderTexture.Create();
+
+        // Recreate the trail texture
+        if (trailTexture != null)
+            trailTexture.Release();
+        trailTexture = new RenderTexture(textureResolution, textureResolution, 0, RenderTextureFormat.ARGB32);
+        trailTexture.enableRandomWrite = true;
+        trailTexture.Create();
+
+        // Reinitialize arrays
+        comfortMap = new float[textureResolution, textureResolution];
+        hasTrailMap = new bool[textureResolution, textureResolution];
+        changedPixels = new bool[textureResolution, textureResolution];
+        trailColors = new Color[textureResolution * textureResolution];
+
+        // Clear all textures and arrays
+        ClearTextures();
+
+        // Reinitialize compute shader resources
+        if (trailComputeShader != null)
+        {
+            InitializeComputeResources();
+        }
+
+        // Update the plane material
+        if (planeMaterial != null)
+        {
+            planeMaterial.mainTexture = trailTexture;
+        }
+    }
+
+    private void CleanupResources()
+    {
+        // Clean up textures
+        if (pathTexture != null)
+        {
+            Destroy(pathTexture);
+            pathTexture = null;
+        }
+
+        if (pathRenderTexture != null)
+        {
+            pathRenderTexture.Release();
+            Destroy(pathRenderTexture);
+            pathRenderTexture = null;
+        }
+
+        if (trailTexture != null)
+        {
+            trailTexture.Release();
+            Destroy(trailTexture);
+            trailTexture = null;
+        }
+
+        // Clean up compute buffer
+        if (trailPositionBuffer != null)
+        {
+            trailPositionBuffer.Release();
+            trailPositionBuffer = null;
+        }
+    }
+
+    private void ClearTextures()
+    {
+        // Clear the comfort map
+        for (int x = 0; x < textureResolution; x++)
+        {
+            for (int y = 0; y < textureResolution; y++)
+            {
+                comfortMap[x, y] = 0f;
+                hasTrailMap[x, y] = false;
+                changedPixels[x, y] = false;
+            }
+        }
+
+        // Initialize trail colors based on comfort map values
+        for (int i = 0; i < trailColors.Length; i++)
+        {
+            trailColors[i] = GetColorForComfortValue(0f); // Will return comfortColor0 (red) for 0 comfort
+        }
+
+        // Initialize the path texture with comfort colors
+        if (pathTexture != null)
+        {
+            Color[] colors = new Color[textureResolution * textureResolution];
+            for (int i = 0; i < colors.Length; i++)
+                colors[i] = GetColorForComfortValue(0f);
+            pathTexture.SetPixels(colors);
+            pathTexture.Apply();
+        }
+
+        // Initialize the trail texture
+        if (trailTexture != null)
+        {
+            RenderTexture tmp = RenderTexture.GetTemporary(textureResolution, textureResolution, 0);
+            Graphics.Blit(pathTexture, trailTexture);
+            RenderTexture.ReleaseTemporary(tmp);
+        }
+
+        // Clear lists
+        changedPixelsList.Clear();
+        steppedCellsThisFrame.Clear();
+
+        // Force texture update
+        forceTextureUpdate = true;
+    }
+
+    // Helper method to get color based on comfort value
+    private Color GetColorForComfortValue(float comfort)
+    {
+        // Normalize comfort value to 0-1 range
+        float normalizedComfort = Mathf.Clamp01(comfort / maxComfortLevel);
+        
+        
+        // Use the comfort colors based on thresholds
+        Color resultColor;
+        if (normalizedComfort <= 0.2f)
+            resultColor = Color.Lerp(comfortColor0, comfortColor1, normalizedComfort * 5f);
+        else if (normalizedComfort <= 0.4f)
+            resultColor = Color.Lerp(comfortColor1, comfortColor2, (normalizedComfort - 0.2f) * 5f);
+        else if (normalizedComfort <= 0.6f)
+            resultColor = Color.Lerp(comfortColor2, comfortColor3, (normalizedComfort - 0.4f) * 5f);
+        else if (normalizedComfort <= 0.8f)
+            resultColor = Color.Lerp(comfortColor3, comfortColor4, (normalizedComfort - 0.6f) * 5f);
+        else if (normalizedComfort <= 0.9f)
+            resultColor = Color.Lerp(comfortColor4, comfortColor5, (normalizedComfort - 0.8f) * 10f);
+        else
+            resultColor = Color.Lerp(comfortColor5, comfortColor6, (normalizedComfort - 0.9f) * 10f);
+
+        return resultColor;
+    }
+
+    private void UpdateTrailVisualization()
+    {
+        // Update trail colors based on comfort map
+        for (int x = 0; x < textureResolution; x++)
+        {
+            for (int y = 0; y < textureResolution; y++)
+            {
+                int index = y * textureResolution + x;
+                float comfortValue = comfortMap[x, y];
+                trailColors[index] = GetColorForComfortValue(comfortValue);
+            }
+        }
+
+        // Apply colors to texture
+        if (pathTexture != null)
+        {
+            pathTexture.SetPixels(trailColors);
+            pathTexture.Apply();
+        }
+
+        // Update trail texture
+        if (trailTexture != null)
+        {
+            Graphics.Blit(pathTexture, trailTexture);
+        }
     }
 }
 

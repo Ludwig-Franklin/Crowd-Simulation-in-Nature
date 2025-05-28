@@ -1,12 +1,43 @@
 #pragma kernel CSMain
 
-// Create a RenderTexture with enableRandomWrite flag and set it
-// with cs.SetTexture
+// Textures
 RWTexture2D<float4> Result;
 Texture2D<float4> ColorMap;
 
 // Parameters
 int textureResolution;
+float maxComfortLevel;
+
+// Comfort colors
+float4 comfortColor0; // red (0)
+float4 comfortColor1; // yellow (0.2)
+float4 comfortColor2; // green (0.4)
+float4 comfortColor3; // cyan (0.6)
+float4 comfortColor4; // blue (0.8)
+float4 comfortColor5; // magenta (0.9)
+float4 comfortColor6; // white (1.0)
+
+// Helper function to lerp between colors based on comfort value
+float4 GetColorForComfort(float comfort)
+{
+    float normalizedComfort = saturate(comfort / maxComfortLevel);
+    
+    float4 resultColor;
+    if (normalizedComfort <= 0.2)
+        resultColor = lerp(comfortColor0, comfortColor1, normalizedComfort * 5.0);
+    else if (normalizedComfort <= 0.4)
+        resultColor = lerp(comfortColor1, comfortColor2, (normalizedComfort - 0.2) * 5.0);
+    else if (normalizedComfort <= 0.6)
+        resultColor = lerp(comfortColor2, comfortColor3, (normalizedComfort - 0.4) * 5.0);
+    else if (normalizedComfort <= 0.8)
+        resultColor = lerp(comfortColor3, comfortColor4, (normalizedComfort - 0.6) * 5.0);
+    else if (normalizedComfort <= 0.9)
+        resultColor = lerp(comfortColor4, comfortColor5, (normalizedComfort - 0.8) * 10.0);
+    else
+        resultColor = lerp(comfortColor5, comfortColor6, (normalizedComfort - 0.9) * 10.0);
+    
+    return resultColor;
+}
 
 [numthreads(8, 8, 1)]
 void CSMain (uint3 id : SV_DispatchThreadID)
@@ -15,9 +46,12 @@ void CSMain (uint3 id : SV_DispatchThreadID)
     if (id.x >= (uint)textureResolution || id.y >= (uint)textureResolution)
         return;
         
-    // Get the color from the color map
-    float4 color = ColorMap[id.xy];
+    // Get the comfort value from the color map's alpha channel
+    float comfort = ColorMap[id.xy].a * maxComfortLevel;
     
-    // Apply the color to the result texture
+    // Convert comfort value to color
+    float4 color = GetColorForComfort(comfort);
+    
+    // Store the color in the result texture
     Result[id.xy] = color;
 } 

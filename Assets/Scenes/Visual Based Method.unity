@@ -465,7 +465,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 1}
   m_AnchorMax: {x: 0, y: 1}
-  m_AnchoredPosition: {x: 160, y: -130}
+  m_AnchoredPosition: {x: 120, y: -130}
   m_SizeDelta: {x: 200, y: 50}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &640527123
@@ -515,8 +515,8 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 14
-  m_fontSizeBase: 14
+  m_fontSize: 12
+  m_fontSizeBase: 12
   m_fontWeight: 400
   m_enableAutoSizing: 0
   m_fontSizeMin: 18
@@ -1346,7 +1346,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   agentPrefab: {fileID: 8253824240745918904, guid: 2daf76c33f5f5c74b99888a1aeb58a7e, type: 3}
   spawnHeight: 0.5
-  maxAgents: 10
+  agentAmount: 30
   agentColors:
   - {r: 1, g: 0, b: 0, a: 1}
   - {r: 0, g: 1, b: 0, a: 1}
@@ -1362,10 +1362,11 @@ MonoBehaviour:
   - {fileID: 898258175}
   - {fileID: 142394472}
   - {fileID: 1127720695}
+  cyclicalSpawns: 1
   spawnColor: {r: 0.7283019, g: 0.18001422, b: 0.6617814, a: 1}
   goalColor: {r: 0.20104665, g: 0.7056604, b: 0.22580631, a: 1}
   dualColor: {r: 0.79622644, g: 0.7900715, b: 0.2088216, a: 1}
-  spawnInterval: 0.4
+  spawnInterval: 0.5
   goalReachedDistance: 1.5
 --- !u!114 &1764469328
 MonoBehaviour:
@@ -1379,33 +1380,32 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b5ae20c8da4276e4e951d7f8ca20ae7c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  goalForceStrength: 5
+  goalForceStrength: 10
   agentRepulsionForce: 0
   agentRepulsionRadius: 1.5
-  pathFollowStrength: 1
-  HelbingsDistanceFactor_sigma: 5
-  visualPathFollowStrength: 12
-  VisualDistanceFactor_sigma: 5
-  agentMaxSpeed_v0: 5
-  relaxationTime_tau: 0.5
-  goalReachedThreshold: 0.5
+  pathFollowStrength: 2
+  HelbingsDistanceFactor_sigma: 7
+  visualPathFollowStrength: 180
+  VisualDistanceFactor_sigma: 4
+  agentMaxSpeed_v0: 15
+  relaxationTime_tau: 0.1
   currentPathFollowingMethod: 1
-  visionArcCount: 10
-  firstArcPointCount: 20
-  lastArcPointCount: 40
+  visionArcCount: 5
+  firstArcPointCount: 10
+  lastArcPointCount: 20
   showForces: 1
   showSampledPoints: 1
   trailWidth: 3
   trailRecoveryRate_T: 5
+  footstepIntensity_I: 10
   maxComfortLevel: 20
-  footstepIntensity_I: 0.8
   comfortColor0: {r: 1, g: 0, b: 0, a: 1}
   comfortColor1: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
   comfortColor2: {r: 0, g: 1, b: 0, a: 1}
   comfortColor3: {r: 0, g: 1, b: 1, a: 1}
   comfortColor4: {r: 0, g: 0, b: 1, a: 1}
   comfortColor5: {r: 1, g: 0, b: 1, a: 1}
-  comfortColor6: {r: 2, g: 0, b: 1, a: 2}
+  comfortColor6: {r: 1, g: 0, b: 0.5, a: 1}
   agentSpawner: {fileID: 1764469324}
   trailComputeShader: {fileID: 7200000, guid: 889540169cf756d41b9d3cf8b5a80931, type: 3}
   planeMaterial: {fileID: 10303, guid: 0000000000000000f000000000000000, type: 0}
@@ -1467,27 +1467,26 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ca652915ebb96df42b59c11ce4d337b5, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  simulationConfigs:
-  - agentCount: 10
-    simulationSteps: 100
-    runHelbing: 1
-    runVision: 0
-  - agentCount: 10
-    simulationSteps: 100
-    runHelbing: 0
-    runVision: 1
+  simulationConfigs: []
   runExperiment: 0
   currentSimulationIndex: 0
   currentMethodIndex: 0
   currentStep: 0
   experimentRunning: 0
-  dataFolderName: simulation_data
+  useCyclicalSpawns: 1
+  dataCollectionInterval: 100
+  takeScreenshots: 1
   simulator: {fileID: 1764469328}
   agentSpawner: {fileID: 1764469324}
   scriptManager: {fileID: 1764469330}
   metricsManager: {fileID: 1764469332}
+  screenshotCamera: {fileID: 0}
   experimentStatusText: {fileID: 640527123}
   progressSlider: {fileID: 1944998244}
+  testsToRun:
+  - testName: 
+    testType: 4
+    enabled: 0
 --- !u!1001 &1782644141
 PrefabInstance:
   m_ObjectHideFlags: 0

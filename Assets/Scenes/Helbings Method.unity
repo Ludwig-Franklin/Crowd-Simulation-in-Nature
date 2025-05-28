@@ -1346,7 +1346,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   agentPrefab: {fileID: 8253824240745918904, guid: 2daf76c33f5f5c74b99888a1aeb58a7e, type: 3}
   spawnHeight: 0.5
-  maxAgents: 10
+  agentAmount: 20
   agentColors:
   - {r: 1, g: 0, b: 0, a: 1}
   - {r: 0, g: 1, b: 0, a: 1}
@@ -1362,6 +1362,8 @@ MonoBehaviour:
   - {fileID: 898258175}
   - {fileID: 142394472}
   - {fileID: 1127720695}
+  cyclicalSpawns: 0
+  agentsPerCycle: 6
   spawnColor: {r: 0.7283019, g: 0.18001422, b: 0.6617814, a: 1}
   goalColor: {r: 0.20104665, g: 0.7056604, b: 0.22580631, a: 1}
   dualColor: {r: 0.79622644, g: 0.7900715, b: 0.2088216, a: 1}
@@ -1379,7 +1381,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b5ae20c8da4276e4e951d7f8ca20ae7c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  goalForceStrength: 5
+  goalForceStrength: 10
   agentRepulsionForce: 0
   agentRepulsionRadius: 1.5
   pathFollowStrength: 1
@@ -1387,7 +1389,7 @@ MonoBehaviour:
   visualPathFollowStrength: 1
   VisualDistanceFactor_sigma: 1
   agentMaxSpeed_v0: 5
-  relaxationTime_tau: 1
+  relaxationTime_tau: 0.5
   goalReachedThreshold: 0.5
   currentPathFollowingMethod: 0
   visionArcCount: 222
@@ -1396,7 +1398,6 @@ MonoBehaviour:
   showForces: 1
   showSampledPoints: 0
   trailWidth: 3
-  trailUpdateIntervalFrames: 5
   trailRecoveryRate_T: 5
   maxComfortLevel: 20
   footstepIntensity_I: 0.8
@@ -1411,7 +1412,6 @@ MonoBehaviour:
   trailComputeShader: {fileID: 7200000, guid: 889540169cf756d41b9d3cf8b5a80931, type: 3}
   planeMaterial: {fileID: 10303, guid: 0000000000000000f000000000000000, type: 0}
   textureResolution: 100
-  comfortMapUpdateInterval: 5
   forceTextureUpdate: 0
   agents: []
 --- !u!114 &1764469330
@@ -1470,24 +1470,60 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   simulationConfigs:
-  - agentCount: 10
-    simulationSteps: 100
+  - agentCount: 1
+    simulationSteps: 6000
     runHelbing: 1
-    runVision: 0
-  - agentCount: 10
-    simulationSteps: 100
-    runHelbing: 0
     runVision: 1
-  runExperiment: 0
+    goalForceStrength: 10
+    helbingPathFollowStrength: 1
+    helbingDistanceFactor: 1
+    visualPathFollowStrength: 15
+    visualDistanceFactor: 5
+    agentMaxSpeed: 5
+    relaxationTime: 0.5
+    trailWidth: 3
+    trailRecoveryRate: 5
+    maxComfortLevel: 20
+    footstepIntensity: 0.8
+    visionArcCount: 10
+    firstArcPointCount: 20
+    lastArcPointCount: 40
+    fieldOfView: 120
+    textureResolution: 100
+  - agentCount: 1
+    simulationSteps: 6000
+    runHelbing: 1
+    runVision: 1
+    goalForceStrength: 10
+    helbingPathFollowStrength: 1
+    helbingDistanceFactor: 1
+    visualPathFollowStrength: 15
+    visualDistanceFactor: 5
+    agentMaxSpeed: 5
+    relaxationTime: 0.5
+    trailWidth: 3
+    trailRecoveryRate: 5
+    maxComfortLevel: 20
+    footstepIntensity: 0.8
+    visionArcCount: 10
+    firstArcPointCount: 20
+    lastArcPointCount: 40
+    fieldOfView: 120
+    textureResolution: 200
+  runExperiment: 1
   currentSimulationIndex: 0
   currentMethodIndex: 0
   currentStep: 0
   experimentRunning: 0
-  dataFolderName: simulation_data
+  useCyclicalSpawns: 1
+  experimentName: Helbings_path_strength
+  dataCollectionInterval: 1000
+  takeScreenshots: 1
   simulator: {fileID: 1764469328}
   agentSpawner: {fileID: 1764469324}
   scriptManager: {fileID: 1764469330}
   metricsManager: {fileID: 1764469332}
+  screenshotCamera: {fileID: 0}
   experimentStatusText: {fileID: 640527123}
   progressSlider: {fileID: 1944998244}
 --- !u!1001 &1782644141

@@ -23,17 +23,10 @@ public class ScriptManager : MonoBehaviour
     
     public void StartSimulation()
     {
+        // Let the AgentSpawner handle spawning and registering agents
         List<Agent> agents = agentSpawner.SpawnAgents();
-        simulator.RegisterAgents(agents);
+        
+        // Just start the simulation - the agents are already registered by the AgentSpawner
         simulator.StartSimulation();
-    }
-
-    public void OnAgentSpawned(Agent agent)
-    {
-        // Register the agent with the simulator
-        if (simulator != null && agent != null)
-        {
-            simulator.RegisterSingleAgent(agent);
-        }
     }
 }
