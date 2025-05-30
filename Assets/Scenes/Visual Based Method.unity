@@ -1354,8 +1354,8 @@ MonoBehaviour:
   - {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
   - {r: 1, g: 0, b: 1, a: 1}
   - {r: 0, g: 1, b: 1, a: 1}
-  visionLength: 30
-  fieldOfView: 120
+  visionLength: 40
+  fieldOfView: 180
   spawnPortals: []
   goalPortals: []
   dualPortals:
@@ -1385,14 +1385,14 @@ MonoBehaviour:
   agentRepulsionRadius: 1.5
   pathFollowStrength: 2
   HelbingsDistanceFactor_sigma: 7
-  visualPathFollowStrength: 180
-  VisualDistanceFactor_sigma: 4
+  visualPathFollowStrength: 20
+  VisualDistanceFactor_sigma: 12
   agentMaxSpeed_v0: 15
   relaxationTime_tau: 0.1
   currentPathFollowingMethod: 1
-  visionArcCount: 5
-  firstArcPointCount: 10
-  lastArcPointCount: 20
+  visionArcCount: 20
+  firstArcPointCount: 50
+  lastArcPointCount: 50
   showForces: 1
   showSampledPoints: 1
   trailWidth: 3
@@ -1468,7 +1468,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   simulationConfigs: []
-  runExperiment: 0
+  runExperiment: 1
   currentSimulationIndex: 0
   currentMethodIndex: 0
   currentStep: 0
@@ -1485,8 +1485,14 @@ MonoBehaviour:
   progressSlider: {fileID: 1944998244}
   testsToRun:
   - testName: 
-    testType: 4
-    enabled: 0
+    testType: 5
+    enabled: 1
+  - testName: 
+    testType: 1
+    enabled: 1
+  - testName: 
+    testType: 2
+    enabled: 1
 --- !u!1001 &1782644141
 PrefabInstance:
   m_ObjectHideFlags: 0

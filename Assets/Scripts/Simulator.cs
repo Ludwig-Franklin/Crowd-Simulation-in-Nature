@@ -29,14 +29,12 @@ public class Simulator : MonoBehaviour
     public float pathFollowStrength = 10f;
 
     [Tooltip("Distance factor for Helbing's method (higher values reduce effect at distance)")]
-    [Range(0f, 10f)]
     public float HelbingsDistanceFactor_sigma = 0.1f;
 
     [Tooltip("Strength of vision-based path following force")]
     public float visualPathFollowStrength = 10f;
 
     [Tooltip("Distance factor for vision-based method (higher values reduce effect at distance) (sigma)")]
-    [Range(0f, 1000f)]
     public float VisualDistanceFactor_sigma = 0.1f;
 
     [Header("Movement Limits")]

@@ -5,6 +5,7 @@ import seaborn as sns
 import numpy as np
 import os
 from matplotlib.ticker import MultipleLocator
+import matplotlib.gridspec as gridspec
 
 def convert_float(value):
     """Convert comma-formatted number to float"""
@@ -67,229 +68,7 @@ def plot_test1(data_folder):
     if not os.path.exists(results_folder):
         os.makedirs(results_folder)
     
-    # List all files in the data folder
-    files = os.listdir(test_folder)
-    
-    fig, axes = plt.subplots(2, 2, figsize=(15, 15))
-    
-    # Store T and I values for each simulation
-    T_values = set()
-    I_values = set()
-    results = []  # Store (T, I, efficiency, civility) tuples
-    
-    # Look for simulation folders
-    for sim_folder in files:
-        if sim_folder.startswith("Helbing_sim_"):
-            result = load_data(os.path.join(test_folder, sim_folder, "data.csv"))
-            if result is not None:
-                data, config_lines = result
-                
-                # Extract T and I values from config
-                T = None
-                I = None
-                for line in config_lines:
-                    if "Trail Recovery Rate" in line:
-                        try:
-                            T = convert_float(line.split("# Trail Recovery Rate:")[1].strip())
-                            T_values.add(T)
-                        except Exception as e:
-                            print(f"Error parsing T from line: {line}, Error: {e}")
-                    elif "Footstep Intensity" in line:
-                        try:
-                            I = convert_float(line.split("# Footstep Intensity:")[1].strip())
-                            I_values.add(I)
-                        except Exception as e:
-                            print(f"Error parsing I from line: {line}, Error: {e}")
-                
-                if T is not None and I is not None:
-                    try:
-                        # Get final values (skip NaN rows)
-                        final_data = data.dropna()
-                        if not final_data.empty:
-                            final_efficiency = final_data['Efficiency'].iloc[-1]
-                            final_civility = final_data['Civility'].iloc[-1] * 20  # Scale civility
-                            results.append((T, I, final_efficiency, final_civility))
-                    except Exception as e:
-                        print(f"Error processing data for T={T}, I={I}: {e}")
-
-    # Convert sets to sorted lists
-    T_values = sorted(list(T_values))
-    I_values = sorted(list(I_values))
-    
-    if not T_values or not I_values or not results:
-        print("Error: No valid data found for plotting")
-        return
-
-    # Create matrices for heatmaps
-    efficiency_matrix = np.zeros((len(I_values), len(T_values)))
-    civility_matrix = np.zeros((len(I_values), len(T_values)))
-    
-    # Fill matrices
-    for T, I, eff, civ in results:
-        try:
-            i = I_values.index(I)
-            j = T_values.index(T)
-            efficiency_matrix[i,j] = convert_float(eff)
-            civility_matrix[i,j] = convert_float(civ)
-        except Exception as e:
-            print(f"Error processing result T={T}, I={I}: {e}")
-
-    # For efficiency time series
-    fig = plt.figure(figsize=(12, 3))  # Start with a wider, shorter figure
-    ax = plt.gca()
-    
-    for sim_folder in files:
-        if sim_folder.startswith("Helbing_sim_"):
-            result = load_data(os.path.join(test_folder, sim_folder, "data.csv"))
-            if result is not None:
-                data, config_lines = result
-                T = None
-                I = None
-                for line in config_lines:
-                    if "Trail Recovery Rate" in line:
-                        T = convert_float(line.split("# Trail Recovery Rate:")[1].strip())
-                    elif "Footstep Intensity" in line:
-                        I = convert_float(line.split("# Footstep Intensity:")[1].strip())
-                
-                if T is not None and I is not None:
-                    ax.plot(data['Step'], data['Efficiency'], 
-                           label=f'T={T:.1f}, I={I:.1f}', alpha=0.7)
-
-    ax.grid(True, alpha=0.3)
-    ax.set_title('Efficiency over time')
-    ax.set_xlabel('Time steps')
-    ax.set_ylabel('Efficiency')
-    ax.set_ylim(0, 4)
-    
-    # Place legend outside and to the right
-    ax.legend(bbox_to_anchor=(1, 1.01), loc='upper left', fontsize='small')
-
-    # Adjust height to match legend
-    adjust_plot_height(ax, fig)
-
-    # Save with tight bbox to remove excess whitespace
-    plt.savefig(os.path.join(results_folder, 'efficiency_time_series.png'), 
-                bbox_inches='tight', 
-                dpi=300)
-    plt.close()
-
-    # Plot efficiency heatmap
-    plt.figure(figsize=(8, 6))
-    sns.heatmap(efficiency_matrix, 
-        xticklabels=T_values, 
-        yticklabels=I_values,
-        cmap='viridis')
-    plt.title('Final Efficiency')
-    plt.xlabel('Trail Recovery Rate (T)')
-    plt.ylabel('Footstep Intensity (I)')
-    plt.tight_layout()
-    plt.savefig(os.path.join(results_folder, 'efficiency_heatmap.png'))
-    plt.close()
-
-    # For civility time series
-    fig = plt.figure(figsize=(12, 3))  # Start with a wider, shorter figure
-    ax = plt.gca()
-    
-    for sim_folder in files:
-        if sim_folder.startswith("Helbing_sim_"):
-            result = load_data(os.path.join(test_folder, sim_folder, "data.csv"))
-            if result is not None:
-                data, config_lines = result
-                T = None
-                I = None
-                for line in config_lines:
-                    if "Trail Recovery Rate" in line:
-                        T = convert_float(line.split("# Trail Recovery Rate:")[1].strip())
-                    elif "Footstep Intensity" in line:
-                        I = convert_float(line.split("# Footstep Intensity:")[1].strip())
-                
-                if T is not None and I is not None:
-                    scaled_civility = data['Civility']
-                    ax.plot(data['Step'], scaled_civility, 
-                            label=f'T={T:.1f}, I={I:.1f}', alpha=0.7)
-
-    ax.grid(True, alpha=0.3)
-    ax.set_title('Civility over time')
-    ax.set_xlabel('Time steps')
-    ax.set_ylabel('Civility')
-    ax.set_ylim(0, 20)
-    ax.yaxis.set_major_locator(plt.MultipleLocator(1))
-
-    # Place legend outside and to the right
-    ax.legend(bbox_to_anchor=(1, 1.01), loc='upper left', fontsize='small')
-
-    # Adjust height to match legend
-    adjust_plot_height(ax, fig)
-
-    # Save with tight bbox to remove excess whitespace
-    plt.savefig(os.path.join(results_folder, 'civility_time_series.png'), 
-                bbox_inches='tight',
-                dpi=300)
-    plt.close()
-
-    # For performance time series
-    fig = plt.figure(figsize=(12, 3))
-    ax = plt.gca()
-    
-    for sim_folder in files:
-        if sim_folder.startswith("Helbing_sim_"):
-            result = load_data(os.path.join(test_folder, sim_folder, "data.csv"))
-            if result is not None:
-                data, config_lines = result
-                T = None
-                I = None
-                for line in config_lines:
-                    if "Trail Recovery Rate" in line:
-                        T = convert_float(line.split("# Trail Recovery Rate:")[1].strip())
-                    elif "Footstep Intensity" in line:
-                        I = convert_float(line.split("# Footstep Intensity:")[1].strip())
-                
-                if T is not None and I is not None:
-                    ax.plot(data['Step'], data['TimeForInterval'], 
-                            label=f'T={T:.1f}, I={I:.1f}', alpha=0.7)
-
-    ax.grid(True, alpha=0.3)
-    ax.set_title('Computation Time per Step')
-    ax.set_xlabel('Time steps')
-    ax.set_ylabel('Time (seconds)')
-
-    # Place legend outside and to the right
-    ax.legend(bbox_to_anchor=(1, 1.01), loc='upper left', fontsize='small')
-
-    # Adjust height to match legend
-    adjust_plot_height(ax, fig)
-
-    # Save with tight bbox to remove excess whitespace
-    plt.savefig(os.path.join(results_folder, 'performance_time_series.png'), 
-                bbox_inches='tight',
-                dpi=300)
-    plt.close()
-
-    # Plot performance heatmap
-    plt.figure(figsize=(8, 6))
-    performance_matrix = np.zeros((len(I_values), len(T_values)))
-    for T, I, eff, civ in results:
-        i = I_values.index(I)
-        j = T_values.index(T)
-        # Use the average of last 100 steps
-        result = load_data(os.path.join(test_folder, f"Helbing_sim_{i*len(T_values)+j+1}", "data.csv"))
-        if result is not None:
-            data, _ = result
-            performance_matrix[i,j] = data['TimeForInterval'].iloc[-100:].mean()
-
-    sns.heatmap(performance_matrix,
-        xticklabels=T_values,
-        yticklabels=I_values,
-        cmap='viridis')
-    plt.title('Final Computation Time')
-    plt.xlabel('Trail Recovery Rate (T)')
-    plt.ylabel('Footstep Intensity (I)')
-    plt.tight_layout()
-    plt.savefig(os.path.join(results_folder, 'performance_heatmap.png'))
-    plt.close()
-
-    # Plot civility heatmap with Unity colors
-    plt.figure(figsize=(8, 6))
+    # Define Unity's comfort colormap
     colors = [
         'red',          # comfortColor0 (0)
         'yellow',       # comfortColor1 (~20%)
@@ -300,22 +79,192 @@ def plot_test1(data_folder):
         '#FF0080'      # comfortColor6 (pink, RGB: 1.0, 0.0, 0.5)
     ]
     thresholds = [0, 0.2, 0.4, 0.6, 0.8, 0.9, 1.0]
-    custom_cmap = LinearSegmentedColormap.from_list('comfort_cmap', 
-        list(zip(thresholds, colors)))
-
-    # Sort I_values in ascending order and flip the matrix vertically
-    I_values = sorted(list(I_values))  # Make sure it's in ascending order
-    sns.heatmap(np.flipud(civility_matrix),  # Flip matrix vertically
-        xticklabels=T_values, 
-        yticklabels=I_values[::-1],  # Reverse the labels to match flipped matrix
-        cmap=custom_cmap,
-        vmin=0,
-        vmax=20)
-    plt.title('Final Civility')
-    plt.xlabel('Trail Recovery Rate (T)')
-    plt.ylabel('Footstep Intensity (I)')
+    comfort_cmap = LinearSegmentedColormap.from_list('comfort_cmap', list(zip(thresholds, colors)))
+    
+    # Store T and I values for each simulation
+    T_values = set()
+    I_values = set()
+    results = []
+    
+    # Collect data and find final screenshots
+    files = os.listdir(test_folder)
+    for sim_folder in files:
+        if sim_folder.startswith("Helbing_sim_"):
+            result = load_data(os.path.join(test_folder, sim_folder, "data.csv"))
+            if result is not None:
+                data, config_lines = result
+                T = None
+                I = None
+                for line in config_lines:
+                    if "Trail Recovery Rate" in line:
+                        T = convert_float(line.split("Trail Recovery Rate:")[1].strip())
+                    elif "Footstep Intensity" in line:
+                        I = convert_float(line.split("Footstep Intensity:")[1].strip())
+                
+                if T is not None and I is not None:
+                    T_values.add(T)
+                    I_values.add(I)
+                    final_efficiency = data['Efficiency'].iloc[-1]
+                    final_civility = data['Civility'].iloc[-1] * 20
+                    results.append((T, I, final_efficiency, final_civility))
+    
+    # Create screenshot grid
+    T_values = sorted(list(T_values))
+    I_values = sorted(list(I_values))
+    
+    # Remove first row and column (they are empty)
+    T_values = T_values[1:]
+    I_values = I_values[1:]
+    
+    # Make plots bigger and tighter together
+    fig, axes = plt.subplots(len(I_values), len(T_values), 
+                            figsize=(5*len(T_values), 5*len(I_values)),
+                            gridspec_kw={'wspace': 0.1, 'hspace': 0.2})
+    
+    # Make axes 2D if it's 1D
+    if len(I_values) == 1:
+        axes = np.array([axes])
+    if len(T_values) == 1:
+        axes = axes.reshape(-1, 1)
+    
+    # Find matching screenshots for each T,I combination
+    for i, I in enumerate(I_values):
+        for j, T in enumerate(T_values):
+            found_screenshot = False
+            # Look through all simulation folders for matching T and I values
+            for sim_num in range(1, 50):  # Check Helbing_sim_1 through Helbing_sim_49
+                sim_folder = f"Helbing_sim_{sim_num}"
+                img_path = os.path.join(test_folder, sim_folder, "step_1999.png")
+                
+                if os.path.exists(img_path):
+                    # Check if this simulation matches our T and I values
+                    result = load_data(os.path.join(test_folder, sim_folder, "data.csv"))
+                    if result is not None:
+                        data, config_lines = result
+                        sim_T = None
+                        sim_I = None
+                        for line in config_lines:
+                            if "Trail Recovery Rate" in line:
+                                sim_T = convert_float(line.split("Trail Recovery Rate:")[1].strip())
+                            elif "Footstep Intensity" in line:
+                                sim_I = convert_float(line.split("Footstep Intensity:")[1].strip())
+                        
+                        if sim_T == T and sim_I == I:
+                            # Load and crop image
+                            img = plt.imread(img_path)
+                            h, w = img.shape[:2]
+                            crop_left = int(w * 0.25)
+                            crop_right = int(w * 0.75)
+                            crop_top = int(h * 0.1)
+                            crop_bottom = int(h * 0.9)
+                            cropped_img = img[crop_top:crop_bottom, crop_left:crop_right]
+                            
+                            axes[i,j].imshow(cropped_img)
+                            found_screenshot = True
+                            break
+            
+            if found_screenshot:
+                axes[i,j].set_title(f'T={T}, I={I}', fontsize=14, fontweight='bold')
+                axes[i,j].axis('off')
+    
     plt.tight_layout()
-    plt.savefig(os.path.join(results_folder, 'civility_heatmap.png'))
+    plt.savefig(os.path.join(results_folder, 'final_trails_grid.png'), dpi=300, bbox_inches='tight')
+    plt.close()
+    
+    # Create time series plot for efficiency and civility
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(15, 12), height_ratios=[1, 1])
+    plt.subplots_adjust(hspace=0.3)  # Add space between plots
+    
+    for sim_folder in files:
+        if sim_folder.startswith("Helbing_sim_"):
+            result = load_data(os.path.join(test_folder, sim_folder, "data.csv"))
+            if result is not None:
+                data, config_lines = result
+                T = None
+                I = None
+                for line in config_lines:
+                    if "Trail Recovery Rate" in line:
+                        T = convert_float(line.split("Trail Recovery Rate:")[1].strip())
+                    elif "Footstep Intensity" in line:
+                        I = convert_float(line.split("Footstep Intensity:")[1].strip())
+                
+                if T is not None and I is not None:
+                    label = f'T={T}, I={I}'
+                    ax1.plot(data['Step'], data['Efficiency'], label=label, alpha=0.7)
+                    ax2.plot(data['Step'], data['Civility'] * 20, alpha=0.7)  # Scale civility to 0-20
+    
+    # Configure efficiency subplot
+    ax1.set_title('Efficiency over Time')
+    ax1.set_ylabel('Efficiency')
+    ax1.grid(True, alpha=0.3)
+    ax1.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+    
+    # Configure civility subplot
+    ax2.set_title('Civility over Time')
+    ax2.set_xlabel('Time steps')
+    ax2.set_ylabel('Civility')
+    ax2.set_ylim(0, 20)  # Set y-axis limits for civility
+    ax2.grid(True, alpha=0.3)
+    
+    plt.savefig(os.path.join(results_folder, 'metrics_time_series.png'), 
+                bbox_inches='tight', dpi=300)
+    plt.close()
+
+    # Create matrices for heatmaps
+    T_values = sorted(list(T_values))
+    I_values = sorted(list(I_values))
+    
+    # Remove first row and column (they are empty)
+    T_values = T_values[1:]
+    I_values = I_values[1:]
+    
+    # Filter results to only include values that exist in our trimmed T_values and I_values lists
+    filtered_results = [(T, I, eff, civ) for T, I, eff, civ in results if T in T_values and I in I_values]
+    
+    efficiency_matrix = np.zeros((len(I_values), len(T_values)))
+    civility_matrix = np.zeros((len(I_values), len(T_values)))
+    
+    for T, I, eff, civ in filtered_results:
+        i = I_values.index(I)
+        j = T_values.index(T)
+        efficiency_matrix[i, j] = eff
+        civility_matrix[i, j] = civ
+    
+    # Create combined heatmap figure
+    fig, axes = plt.subplots(1, 2, figsize=(15, 6))
+    
+    # Plot efficiency
+    sns.heatmap(efficiency_matrix,
+                xticklabels=T_values,
+                yticklabels=I_values,
+                cmap='viridis',
+                annot=True,
+                fmt='.2f',
+                ax=axes[0],
+                cbar_kws={'label': 'Efficiency'})
+    axes[0].set_title('Final Efficiency')
+    axes[0].set_xlabel('Trail Recovery Rate (T)')
+    axes[0].set_ylabel('Footstep Intensity (I)')
+    
+    # Plot civility with Unity colors
+    sns.heatmap(civility_matrix,
+                xticklabels=T_values,
+                yticklabels=I_values,
+                cmap=comfort_cmap,
+                vmin=0,
+                vmax=20,
+                annot=True,
+                fmt='.2f',
+                ax=axes[1],
+                cbar_kws={'label': 'Civility'})
+    axes[1].set_title('Final Civility')
+    axes[1].set_xlabel('Trail Recovery Rate (T)')
+    axes[1].set_ylabel('Footstep Intensity (I)')
+    
+    plt.suptitle('Trail Formation Parameter Effects', y=1.05)
+    plt.tight_layout()
+    plt.savefig(os.path.join(results_folder, 'combined_metrics_heatmap.png'),
+                bbox_inches='tight', dpi=300)
     plt.close()
 
 def calculate_total_samples(vision_arc, first_arc, last_arc):
@@ -338,19 +287,27 @@ def calculate_total_samples(vision_arc, first_arc, last_arc):
 
 def plot_test3(data_folder):
     """Plot sample points test results"""
-    test_folder = os.path.join(data_folder, "Sample_Points")
-    results_folder = os.path.join(test_folder, "Results")
+    test_folder = os.path.join(data_folder, "3_Sample_points_paired_with_forces_and_sigmas_small")
+    results_folder = os.path.join(test_folder, "_Results")
     if not os.path.exists(results_folder):
         os.makedirs(results_folder)
     
+    # Define Unity's color scheme for comfort map
+    colors = [
+        'red', 'yellow', 'green', 'cyan', 'blue', 'magenta', '#FF0080'
+    ]
+    thresholds = [0, 0.2, 0.4, 0.6, 0.8, 0.9, 1.0]
+    comfort_cmap = LinearSegmentedColormap.from_list('comfort_cmap', 
+        list(zip(thresholds, colors)))
+    
     # Dictionary to store data for each sampling configuration
     sampling_configs = {
-        "small": {"arcs": 5, "first": 10, "last": 20, "data": []},
-        "medium": {"arcs": 10, "first": 20, "last": 40, "data": []},
-        "large": {"arcs": 15, "first": 30, "last": 60, "data": []}
+        "small": {"arcs": 5, "first": 10, "last": 20, "data": [], "row": 0},
+        "medium": {"arcs": 10, "first": 20, "last": 40, "data": [], "row": 1},
+        "large": {"arcs": 15, "first": 30, "last": 60, "data": [], "row": 2}
     }
     
-    # Collect data for each configuration
+    # First collect all data and screenshots
     files = os.listdir(test_folder)
     for sim_folder in files:
         if sim_folder.startswith("Vision_sim_"):
@@ -372,42 +329,32 @@ def plot_test3(data_folder):
                     elif "Visual Distance Factor:" in line:
                         sigma = convert_float(line.split("Visual Distance Factor:")[1].strip())
                 
-                # Determine which configuration this belongs to
+                # Find matching configuration
                 for config_name, config in sampling_configs.items():
                     if (vision_arc == config["arcs"] and 
                         first_arc == config["first"] and 
                         last_arc == config["last"]):
                         efficiency = data['Efficiency'].mean()
-                        civility = data['Civility'].mean() * 20  # Scale civility to match Unity
-                        config["data"].append((force, sigma, efficiency, civility))
+                        civility = data['Civility'].mean() * 20
+                        
+                        # Also store the screenshot path if it exists
+                        screenshot_path = os.path.join(test_folder, sim_folder, "step_1999.png")
+                        if os.path.exists(screenshot_path):
+                            config["data"].append((force, sigma, efficiency, civility, screenshot_path))
     
-    # Create heatmaps for each configuration
+    # FIGURE 1: Stacked Heatmaps
+    fig_heatmaps = plt.figure(figsize=(15, 20))
+    gs = plt.GridSpec(3, 2, height_ratios=[1, 1, 1], hspace=0.3)
+    
     metrics = ["efficiency", "civility"]
-    
-    # Define Unity's color scheme
-    colors = [
-        'red',          # comfortColor0 (0)
-        'yellow',       # comfortColor1 (~20%)
-        'green',        # comfortColor2 (~40%)
-        'cyan',         # comfortColor3 (~60%)
-        'blue',         # comfortColor4 (~80%)
-        'magenta',      # comfortColor5 (~90%)
-        '#FF0080'      # comfortColor6 (pink, RGB: 1.0, 0.0, 0.5)
-    ]
-    thresholds = [0, 0.2, 0.4, 0.6, 0.8, 0.9, 1.0]
-    comfort_cmap = LinearSegmentedColormap.from_list('comfort_cmap', 
-        list(zip(thresholds, colors)))
-    
     for config_name, config in sampling_configs.items():
-        if not config["data"]:
-            continue
-            
-        fig, axes = plt.subplots(1, 2, figsize=(20, 8))
-        
         forces = sorted(list(set(x[0] for x in config["data"])))
         sigmas = sorted(list(set(x[1] for x in config["data"])))
         
-        for metric_idx, metric in enumerate(metrics):
+        ax1 = fig_heatmaps.add_subplot(gs[config["row"], 0])
+        ax2 = fig_heatmaps.add_subplot(gs[config["row"], 1])
+        
+        for metric_idx, (metric, ax) in enumerate(zip(metrics, [ax1, ax2])):
             matrix = np.zeros((len(forces), len(sigmas)))
             for force_idx, force in enumerate(forces):
                 for sigma_idx, sigma in enumerate(sigmas):
@@ -416,49 +363,129 @@ def plot_test3(data_folder):
                     if matching_data:
                         matrix[force_idx, sigma_idx] = matching_data[0]
             
-            ax = axes[metric_idx]
-            
-            # Use different colormaps for efficiency and civility
+            # Use seaborn's heatmap instead of imshow
             if metric == "efficiency":
-                im = ax.imshow(matrix, cmap='viridis', aspect='auto', origin='lower')
-            else:  # civility
-                im = ax.imshow(matrix, cmap=comfort_cmap, aspect='auto', origin='lower',
-                             vmin=0, vmax=20)  # Set range for civility
-            
-            plt.colorbar(im, ax=ax, label=metric.capitalize())
-            
-            # Set labels
-            ax.set_xticks(range(len(sigmas)))
-            ax.set_yticks(range(len(forces)))
-            ax.set_xticklabels([f'{s:.1f}' for s in sigmas], rotation=45)
-            ax.set_yticklabels([f'{f:.1f}' for f in forces])
+                sns.heatmap(matrix,
+                           xticklabels=[f'{s:.1f}' for s in sigmas],
+                           yticklabels=[f'{f:.1f}' for f in forces],
+                           cmap='viridis',
+                           annot=True,
+                           fmt='.2f',
+                           ax=ax,
+                           cbar_kws={'label': metric.capitalize()})
+            else:
+                sns.heatmap(matrix,
+                           xticklabels=[f'{s:.1f}' for s in sigmas],
+                           yticklabels=[f'{f:.1f}' for f in forces],
+                           cmap=comfort_cmap,
+                           vmin=0,
+                           vmax=20,
+                           annot=True,
+                           fmt='.2f',
+                           ax=ax,
+                           cbar_kws={'label': metric.capitalize()})
             
             ax.set_xlabel('Sigma (σ)')
             ax.set_ylabel('Force')
-            ax.set_title(f'{metric.capitalize()} Heatmap for {config_name.capitalize()} Sampling\n' +
+            ax.set_title(f'{metric.capitalize()} for {config_name.capitalize()} Sampling\n' +
                         f'(Arcs: {config["arcs"]}, Points: {config["first"]}-{config["last"]})')
-            
-            # Add text annotations
-            for i in range(len(forces)):
-                for j in range(len(sigmas)):
-                    text = ax.text(j, i, f'{matrix[i, j]:.2f}',
-                                 ha="center", va="center", color="w")
-            
-            # Find and mark best parameters
-            best_idx = np.unravel_index(np.argmax(matrix), matrix.shape)
-            best_force = forces[best_idx[0]]
-            best_sigma = sigmas[best_idx[1]]
-            best_value = matrix[best_idx]
-            
-            # Add text box with best parameters
-            ax.text(0.95, 0.95, f'Best Parameters:\nForce: {best_force:.1f}\nSigma: {best_sigma:.1f}\n{metric.capitalize()}: {best_value:.2f}',
-                    transform=ax.transAxes, verticalalignment='top',
-                    horizontalalignment='right', bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
+
+    plt.suptitle('Sample Points Configuration Comparison', y=0.95, fontsize=16)
+    plt.tight_layout()
+    plt.savefig(os.path.join(results_folder, 'sampling_comparison_heatmaps.png'),
+                bbox_inches='tight', dpi=300)
+    plt.close()
+
+    # FIGURE 2: Screenshots Grid
+    fig_screenshots = plt.figure(figsize=(20, 25))
+    
+    # Create a 2x1 grid (Helbing on top, Vision on bottom)
+    gs = plt.GridSpec(2, 1, height_ratios=[1, 1], hspace=0.3)
+    
+    # Process each method
+    for method_idx, method in enumerate(["helbing", "vision"]):
+        ax = fig_screenshots.add_subplot(gs[method_idx])
+        ax.axis('off')
         
-        plt.tight_layout()
-        plt.savefig(os.path.join(results_folder, f'{config_name}_sampling_comparison.png'),
-                    bbox_inches='tight', dpi=300)
-        plt.close()
+        # Get the data for this method
+        data = methods_data[method]["data"]
+        forces = sorted(list(set(x[0] for x in data)))
+        sigmas = sorted(list(set(x[1] for x in data)))
+        
+        # Create subplot grid
+        n_rows = len(forces)  # One row per force value
+        n_cols = len(sigmas)  # One column per sigma value
+        
+        # For each force-sigma combination
+        for force_idx, force in enumerate(forces):
+            for sigma_idx, sigma in enumerate(sigmas):
+                # Find the corresponding simulation folder
+                sim_prefix = "Helbing_sim_" if method == "helbing" else "Vision_sim_"
+                screenshot_path = None
+                
+                # Search for matching simulation
+                for sim_folder in os.listdir(test_folder):
+                    if sim_folder.startswith(sim_prefix):
+                        data_file = os.path.join(test_folder, sim_folder, "data.csv")
+                        if os.path.exists(data_file):
+                            result = load_data(data_file)
+                            if result is not None:
+                                _, config_lines = result
+                                sim_force = sim_sigma = None
+                                
+                                # Extract parameters based on method
+                                for line in config_lines:
+                                    if method == "helbing":
+                                        if "Path Follow Strength:" in line and "Visual" not in line:
+                                            sim_force = convert_float(line.split("Path Follow Strength:")[1].strip())
+                                        elif "Helbing Distance Factor:" in line:
+                                            sim_sigma = convert_float(line.split("Helbing Distance Factor:")[1].strip())
+                                    else:  # vision
+                                        if "Visual Path Follow Strength:" in line:
+                                            sim_force = convert_float(line.split("Visual Path Follow Strength:")[1].strip())
+                                        elif "Visual Distance Factor:" in line:
+                                            sim_sigma = convert_float(line.split("Visual Distance Factor:")[1].strip())
+                                
+                                if abs(sim_force - force) < 0.1 and abs(sim_sigma - sigma) < 0.1:
+                                    screenshot_path = os.path.join(test_folder, sim_folder, "step_1999.png")
+                                    break
+                
+                if screenshot_path and os.path.exists(screenshot_path):
+                    # Calculate position for this screenshot
+                    left = sigma_idx / n_cols
+                    bottom = 1 - (force_idx + 1) / n_rows
+                    width = 0.9 / n_cols
+                    height = 0.9 / n_rows
+                    
+                    ax_sub = ax.inset_axes([left, bottom, width, height])
+                    img = plt.imread(screenshot_path)
+                    
+                    # Crop the image to focus on the relevant part
+                    h, w = img.shape[:2]
+                    crop_left = int(w * 0.25)
+                    crop_right = int(w * 0.75)
+                    crop_top = int(h * 0.1)
+                    crop_bottom = int(h * 0.9)
+                    screenshot = img[crop_top:crop_bottom, crop_left:crop_right]
+                    
+                    ax_sub.imshow(screenshot)
+                    ax_sub.set_title(f'F={force:.1f}, σ={sigma:.1f}', fontsize=8, pad=3)
+                    ax_sub.axis('off')
+        
+        # Add method label
+        method_name = "Helbing's Method" if method == "helbing" else "Vision-based Method"
+        ax.set_title(method_name, pad=20, fontsize=14, fontweight='bold')
+        
+        # Add axis labels
+        ax.text(-0.05, 0.5, 'Force', rotation=90, 
+                transform=ax.transAxes, va='center', ha='right', fontsize=12)
+        ax.text(0.5, -0.05, 'Sigma (σ)', 
+                transform=ax.transAxes, va='top', ha='center', fontsize=12)
+
+    #plt.suptitle('Force and Sigma Parameter Comparison - Final States', y=0.95, fontsize=16)
+    plt.savefig(os.path.join(results_folder, 'force_sigma_screenshots_comparison.png'),
+                dpi=300, bbox_inches='tight')
+    plt.close()
 
 def plot_test2(data_folder):
     """Plot path following parameters test results"""
@@ -469,7 +496,7 @@ def plot_test2(data_folder):
     
     # Dictionary to store data for both methods
     methods_data = {
-        "helbing": {"data": []},  # Will store (force, sigma, efficiency, civility) tuples
+        "helbing": {"data": []},
         "vision": {"data": []}
     }
     
@@ -485,58 +512,35 @@ def plot_test2(data_folder):
             if sim_folder.startswith("Helbing_sim_"):
                 method = "helbing"
                 for line in config_lines:
-                    if "# Path Follow Strength:" in line and "Visual" not in line:  # More specific match
-                        force = convert_float(line.split("# Path Follow Strength:")[1].strip())
-                    elif "# Helbing Distance Factor:" in line:
-                        sigma = convert_float(line.split("# Helbing Distance Factor:")[1].strip())
+                    if "Path Follow Strength:" in line and "Visual" not in line:
+                        force = convert_float(line.split("Path Follow Strength:")[1].strip())
+                    elif "Helbing Distance Factor:" in line:
+                        sigma = convert_float(line.split("Helbing Distance Factor:")[1].strip())
             elif sim_folder.startswith("Vision_sim_"):
                 method = "vision"
                 for line in config_lines:
-                    if "# Visual Path Follow Strength:" in line:  # Exact match
-                        force = convert_float(line.split("# Visual Path Follow Strength:")[1].strip())
-                    elif "# Visual Distance Factor:" in line:
-                        sigma = convert_float(line.split("# Visual Distance Factor:")[1].strip())
+                    if "Visual Path Follow Strength:" in line:
+                        force = convert_float(line.split("Visual Path Follow Strength:")[1].strip())
+                    elif "Visual Distance Factor:" in line:
+                        sigma = convert_float(line.split("Visual Distance Factor:")[1].strip())
             
             if force is not None and sigma is not None:
                 efficiency = data['Efficiency'].mean()
-                civility = data['Civility'].mean() * 20  # Already fixed
-                methods_data[method]["data"].append((force, sigma, efficiency, civility))
+                civility = data['Civility'].mean() * 20
+                screenshot_path = os.path.join(test_folder, sim_folder, "step_1999.png")
+                if os.path.exists(screenshot_path):
+                    methods_data[method]["data"].append((force, sigma, efficiency, civility, screenshot_path))
     
-    # After collecting data
-    print("\nDebug: Collected data for Helbing method:")
-    for data_point in methods_data["helbing"]["data"]:
-        print(f"Force: {data_point[0]}, Sigma: {data_point[1]}")
+    # FIGURE 1: Method Comparison Heatmaps
+    fig, axes = plt.subplots(2, 2, figsize=(15, 15))
     
-    print("\nDebug: Collected data for Vision method:")
-    for data_point in methods_data["vision"]["data"]:
-        print(f"Force: {data_point[0]}, Sigma: {data_point[1]}")
-    
-    # Before creating matrix
-    print("\nDebug: Unique force values for each method:")
-    for method in methods_data:
-        data = methods_data[method]["data"]
-        forces = sorted(list(set(x[0] for x in data)))
-        print(f"{method}: {forces}")
-    
-    # Create heatmaps for each method and metric
     metrics = ["efficiency", "civility"]
     methods = ["helbing", "vision"]
     
     # Define Unity's color scheme
-    colors = [
-        'red',          # comfortColor0 (0)
-        'yellow',       # comfortColor1 (~20%)
-        'green',        # comfortColor2 (~40%)
-        'cyan',         # comfortColor3 (~60%)
-        'blue',         # comfortColor4 (~80%)
-        'magenta',      # comfortColor5 (~90%)
-        '#FF0080'      # comfortColor6 (pink, RGB: 1.0, 0.0, 0.5)
-    ]
+    colors = ['red', 'yellow', 'green', 'cyan', 'blue', 'magenta', '#FF0080']
     thresholds = [0, 0.2, 0.4, 0.6, 0.8, 0.9, 1.0]
-    comfort_cmap = LinearSegmentedColormap.from_list('comfort_cmap', 
-        list(zip(thresholds, colors)))
-    
-    fig, axes = plt.subplots(2, 2, figsize=(15, 15))
+    comfort_cmap = LinearSegmentedColormap.from_list('comfort_cmap', list(zip(thresholds, colors)))
     
     for i, metric in enumerate(metrics):
         for j, method in enumerate(methods):
@@ -544,11 +548,9 @@ def plot_test2(data_folder):
             if not data:
                 continue
             
-            # Extract unique force and sigma values - sort in ascending order
-            forces = sorted(list(set(x[0] for x in data)))  # Removed reverse=True
+            forces = sorted(list(set(x[0] for x in data)))
             sigmas = sorted(list(set(x[1] for x in data)))
             
-            # Create matrix
             matrix = np.zeros((len(forces), len(sigmas)))
             for force_idx, force in enumerate(forces):
                 for sigma_idx, sigma in enumerate(sigmas):
@@ -559,46 +561,90 @@ def plot_test2(data_folder):
             
             ax = axes[i, j]
             
-            # Use different colormaps for efficiency and civility, but flip the matrix vertically
+            # Use seaborn's heatmap
             if metric == "efficiency":
-                im = ax.imshow(np.flipud(matrix), cmap='viridis', aspect='auto', origin='lower')
-            else:  # civility
-                im = ax.imshow(np.flipud(matrix), cmap=comfort_cmap, aspect='auto', origin='lower',
-                             vmin=0, vmax=20)
-            
-            plt.colorbar(im, ax=ax, label=metric.capitalize())
-            
-            # Set labels
-            ax.set_xticks(range(len(sigmas)))
-            ax.set_yticks(range(len(forces)))
-            ax.set_xticklabels([f'{s:.1f}' for s in sigmas], rotation=45)
-            ax.set_yticklabels([f'{f:.1f}' for f in forces])
+                sns.heatmap(matrix,
+                           xticklabels=[f'{s:.1f}' for s in sigmas],
+                           yticklabels=[f'{f:.1f}' for f in forces],
+                           cmap='viridis',
+                           annot=True,
+                           fmt='.2f',
+                           ax=ax,
+                           cbar_kws={'label': metric.capitalize()})
+            else:
+                sns.heatmap(matrix,
+                           xticklabels=[f'{s:.1f}' for s in sigmas],
+                           yticklabels=[f'{f:.1f}' for f in forces],
+                           cmap=comfort_cmap,
+                           vmin=0,
+                           vmax=20,
+                           annot=True,
+                           fmt='.2f',
+                           ax=ax,
+                           cbar_kws={'label': metric.capitalize()})
             
             ax.set_xlabel('Sigma (σ)')
             ax.set_ylabel('Force')
             method_name = "Helbing's" if method == "helbing" else "Vision-based"
             ax.set_title(f'{method_name} Method - {metric.capitalize()}')
-            
-            # Add text annotations
-            for fi, force in enumerate(forces):
-                for si, sigma in enumerate(sigmas):
-                    text = ax.text(si, fi, f'{matrix[fi, si]:.2f}',
-                                 ha="center", va="center", color="w")
-            
-            # Find and mark best parameters
-            best_idx = np.unravel_index(np.argmax(matrix), matrix.shape)
-            best_force = forces[best_idx[0]]
-            best_sigma = sigmas[best_idx[1]]
-            best_value = matrix[best_idx]
-            
-            # Add text box with best parameters
-            ax.text(0.95, 0.95, f'Best Parameters:\nForce: {best_force:.1f}\nSigma: {best_sigma:.1f}\n{metric.capitalize()}: {best_value:.2f}',
-                    transform=ax.transAxes, verticalalignment='top',
-                    horizontalalignment='right', bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
     
+    #plt.suptitle('Force and Sigma Parameter Comparison', y=0.95, fontsize=16)
     plt.tight_layout()
-    plt.savefig(os.path.join(results_folder, 'method_comparison_heatmaps.png'),
+    plt.savefig(os.path.join(results_folder, 'force_sigma_heatmaps.png'),
                 bbox_inches='tight', dpi=300)
+    plt.close()
+    
+    # FIGURE 2: Screenshots Grid
+    fig_screenshots = plt.figure(figsize=(20, 25))
+    gs = plt.GridSpec(2, 1, height_ratios=[1, 1], hspace=0.3)
+    
+    for method_idx, method in enumerate(["helbing", "vision"]):
+        ax = fig_screenshots.add_subplot(gs[method_idx])
+        ax.axis('off')
+        
+        data = methods_data[method]["data"]
+        forces = sorted(list(set(x[0] for x in data)))
+        sigmas = sorted(list(set(x[1] for x in data)))
+        
+        n_rows = len(forces)
+        n_cols = len(sigmas)
+        
+        for force_idx, force in enumerate(forces):
+            for sigma_idx, sigma in enumerate(sigmas):
+                matching_data = [x for x in data if x[0] == force and x[1] == sigma]
+                if matching_data:
+                    screenshot_path = matching_data[0][4]
+                    
+                    left = sigma_idx / n_cols
+                    bottom = 1 - (force_idx + 1) / n_rows
+                    width = 0.9 / n_cols
+                    height = 0.9 / n_rows
+                    
+                    ax_sub = ax.inset_axes([left, bottom, width, height])
+                    img = plt.imread(screenshot_path)
+                    
+                    h, w = img.shape[:2]
+                    crop_left = int(w * 0.25)
+                    crop_right = int(w * 0.75)
+                    crop_top = int(h * 0.1)
+                    crop_bottom = int(h * 0.9)
+                    screenshot = img[crop_top:crop_bottom, crop_left:crop_right]
+                    
+                    ax_sub.imshow(screenshot)
+                    ax_sub.set_title(f'F={force:.1f}, σ={sigma:.1f}', fontsize=8, pad=3)
+                    ax_sub.axis('off')
+        
+        method_name = "Helbing's Method" if method == "helbing" else "Vision-based Method"
+        ax.set_title(method_name, pad=20, fontsize=14, fontweight='bold')
+        
+        ax.text(-0.05, 0.5, 'Force', rotation=90, 
+                transform=ax.transAxes, va='center', ha='right', fontsize=12)
+        ax.text(0.5, -0.05, 'Sigma (σ)', 
+                transform=ax.transAxes, va='top', ha='center', fontsize=12)
+    
+    #plt.suptitle('Force and Sigma Parameter Comparison - Final States', y=0.95, fontsize=16)
+    plt.savefig(os.path.join(results_folder, 'force_sigma_screenshots_comparison.png'),
+                dpi=300, bbox_inches='tight')
     plt.close()
 
 def plot_test4(data_folder):
@@ -816,13 +862,15 @@ def create_screenshot_grid(data_folder):
                     # Read and crop image
                     img = plt.imread(os.path.join(screenshot_folder, screenshot_file))
                     h, w = img.shape[:2]
-                    crop_h = int(h * 0.1)
-                    crop_w = int(w * 0.2)  # Increased side cropping
-                    img = img[crop_h:-crop_h, crop_w:-crop_w]
+                    crop_left = int(w * 0.2)
+                    crop_right = int(w * 0.8)
+                    crop_top = int(h * 0.1)
+                    crop_bottom = int(h * 0.9)
+                    cropped_img = img[crop_top:crop_bottom, crop_left:crop_right]
                     
                     # Add to grid
                     ax = plt.subplot(n_rows, n_cols, row_idx * n_cols + col_idx + 1)
-                    ax.imshow(img)
+                    ax.imshow(cropped_img)
                     ax.axis('off')
             
             # Add horizontal line after Vision method
@@ -893,16 +941,20 @@ def create_combined_heatmap(data_folder):
     # Create figure with 2x3 subplot grid (two metrics, three columns)
     fig, axes = plt.subplots(2, 3, figsize=(24, 16))
     
-    # Define the layout - now including difference column
-    layout = [
-        ('Civility', 'Helbing', axes[0,0], 'RdYlGn'),
-        ('Civility', 'Vision', axes[0,1], 'RdYlGn'),
-        ('Civility', 'Difference', axes[0,2], 'RdBu'),  # Red-Blue diverging colormap for difference
-        ('Efficiency', 'Helbing', axes[1,0], 'viridis'),
-        ('Efficiency', 'Vision', axes[1,1], 'viridis'),
-        ('Efficiency', 'Difference', axes[1,2], 'RdBu')
+    # Define Unity's comfort colors at the start of the function
+    colors = [
+        'red',          # comfortColor0 (0)
+        'yellow',       # comfortColor1 (~20%)
+        'green',        # comfortColor2 (~40%)
+        'cyan',         # comfortColor3 (~60%)
+        'blue',         # comfortColor4 (~80%)
+        'magenta',      # comfortColor5 (~90%)
+        '#FF0080'      # comfortColor6 (pink, RGB: 1.0, 0.0, 0.5)
     ]
-    
+    thresholds = [0, 0.2, 0.4, 0.6, 0.8, 0.9, 1.0]
+    comfort_cmap = LinearSegmentedColormap.from_list('comfort_cmap', 
+        list(zip(thresholds, colors)))
+
     # Process each metric separately
     for row, metric in enumerate(['Civility', 'Efficiency']):
         # Prepare data
@@ -931,35 +983,50 @@ def create_combined_heatmap(data_folder):
         # Calculate difference matrix
         diff_matrix = helbing_matrix - vision_matrix
         
-        # Create heatmaps
-        # Helbing
-        sns.heatmap(helbing_matrix,
-                   xticklabels=agent_counts,
-                   yticklabels=[f'{r}×{r}' for r in resolutions],
-                   cmap=layout[row*3][3],
-                   annot=True,
-                   fmt='.2f',
-                   ax=axes[row,0],
-                   cbar_kws={'label': metric})
-        axes[row,0].set_title(f'Helbing - {metric}')
-        axes[row,0].set_xlabel('Number of Agents')
-        axes[row,0].set_ylabel('Resolution')
+        # Create heatmaps - moved outside the resolution loop
+        if metric == 'Civility':
+            sns.heatmap(helbing_matrix,
+                       xticklabels=agent_counts,
+                       yticklabels=[f'{r}×{r}' for r in resolutions],
+                       cmap=comfort_cmap,
+                       annot=True,
+                       fmt='.2f',
+                       ax=axes[row,0],
+                       vmin=0,
+                       vmax=20,
+                       cbar_kws={'label': metric})
+            
+            sns.heatmap(vision_matrix,
+                       xticklabels=agent_counts,
+                       yticklabels=[f'{r}×{r}' for r in resolutions],
+                       cmap=comfort_cmap,
+                       annot=True,
+                       fmt='.2f',
+                       ax=axes[row,1],
+                       vmin=0,
+                       vmax=20,
+                       cbar_kws={'label': metric})
+        else:
+            # For Efficiency, one colorbar per subplot
+            sns.heatmap(helbing_matrix,
+                       xticklabels=agent_counts,
+                       yticklabels=[f'{r}×{r}' for r in resolutions],
+                       cmap='viridis',
+                       annot=True,
+                       fmt='.2f',
+                       ax=axes[row,0],
+                       cbar_kws={'label': metric})
+            
+            sns.heatmap(vision_matrix,
+                       xticklabels=agent_counts,
+                       yticklabels=[f'{r}×{r}' for r in resolutions],
+                       cmap='viridis',
+                       annot=True,
+                       fmt='.2f',
+                       ax=axes[row,1],
+                       cbar_kws={'label': metric})
         
-        # Vision
-        sns.heatmap(vision_matrix,
-                   xticklabels=agent_counts,
-                   yticklabels=[f'{r}×{r}' for r in resolutions],
-                   cmap=layout[row*3+1][3],
-                   annot=True,
-                   fmt='.2f',
-                   ax=axes[row,1],
-                   cbar_kws={'label': metric})
-        axes[row,1].set_title(f'Vision - {metric}')
-        axes[row,1].set_xlabel('Number of Agents')
-        axes[row,1].set_ylabel('Resolution')
-        
-        # Difference
-        # Center the colormap around 0 for the difference plot
+        # Difference plot with its own colorbar
         abs_max = max(abs(diff_matrix.min()), abs(diff_matrix.max()))
         sns.heatmap(diff_matrix,
                    xticklabels=agent_counts,
@@ -972,9 +1039,6 @@ def create_combined_heatmap(data_folder):
                    vmin=-abs_max,
                    vmax=abs_max,
                    cbar_kws={'label': 'Difference'})
-        axes[row,2].set_title(f'Difference (Helbing - Vision) - {metric}')
-        axes[row,2].set_xlabel('Number of Agents')
-        axes[row,2].set_ylabel('Resolution')
 
     plt.suptitle('Method Comparison Across Metrics', y=1.02, fontsize=14)
     plt.tight_layout()
@@ -1165,6 +1229,205 @@ def create_combined_time_series(data_folder):
                     bbox_inches='tight', dpi=300)
         plt.close()
 
+def write_test_descriptions():
+    """
+    Test 1: Trail Formation Parameter Analysis
+    - Purpose: Evaluate how trail intensity (I) and recovery rate (T) affect trail formation
+    - Key Findings:
+        * Higher values of both T and I correlate with increased Civility and Efficiency
+        * Comfort levels show positive correlation with parameter values
+        * Optimal configurations appear around T=15, I=10 or vice versa
+        * Visual evidence shows clear trail formation at these values
+    - Visualizations:
+        * combined_metrics_heatmap_I_and_T
+        * final_trails_grid_I_and_T
+        * metrics_time_series_I_and_T
+
+    Test 2: Method Parameter Comparison
+    - Purpose: Find parameter combinations that produce similar trails between Helbing's and Vision-based methods
+    - Key Findings:
+        * Best Helbing configuration: Force=2, Sigma=6
+        * Closest Vision match: Force=120, Sigma=10
+        * Complete parameter matching proved challenging
+        * Distinct characteristics remain between methods
+    - Visualizations:
+        * force_sigma_heatmaps
+        * force_sigma_screenshots_comparison
+
+    Test 3: Vision Method Sampling Analysis
+    - Purpose: Investigate the impact of sampling point density on trail formation
+    - Key Findings:
+        * No conclusive evidence for optimal sampling configuration
+        * Further investigation needed for minimal sampling requirements
+        * Trail quality varies with sampling density
+        * More systematic testing required
+    - Visualizations:
+        * sampling_comparison_heatmaps
+        * sampling_comparison_screenshots
+
+    Test 4: Performance Scaling Analysis
+    - Purpose: Compare computational efficiency between methods across different scales
+    - Key Findings:
+        * Vision-based method shows significant performance advantages
+        * ~5x speedup observed in high-resolution scenarios
+        * Both methods maintain sub-0.02s step time (Unity FixedUpdate requirement)
+        * Vision method scales better with increased resolution and agent count
+        * Preliminary results promising but require further validation
+    - Visualizations:
+        * civility_combined_time_series
+        * combined_metrics_heatmap
+        * efficiency_combined_time_series
+        * method_comparison_grid
+        * performance_comparison
+    """
+    pass
+
+def plot_test3_small(data_folder):
+    """Plot final screenshots in a grid for the small sampling test"""
+    test_folder = os.path.join(data_folder, "3_Sample_points_paired_with_forces_and_sigmas_small")
+    results_folder = os.path.join(test_folder, "_Results")
+    if not os.path.exists(results_folder):
+        os.makedirs(results_folder)
+    
+    # Parameters from the test
+    forces = [200, 225, 250, 275, 300, 325, 350, 375, 400, 425]
+    sigmas = [2, 4, 6, 8, 10, 12, 14, 16, 18, 20]
+    vision_lengths = [30, 40, 50]
+    fovs = [120, 180]
+    
+    # Create subplots for each vision_length and fov combination
+    fig = plt.figure(figsize=(25, 15))
+    outer_gs = plt.GridSpec(len(vision_lengths), len(fovs), figure=fig, hspace=0.3, wspace=0.2)
+    
+    for v_idx, vision_length in enumerate(vision_lengths):
+        for f_idx, fov in enumerate(fovs):
+            ax = fig.add_subplot(outer_gs[v_idx, f_idx])
+            # Move title up by increasing y position
+            ax.set_title(f'Vision Length: {vision_length}, FOV: {fov}°', pad=25)
+            
+            # Create a grid of screenshots for this configuration
+            inner_gs = gridspec.GridSpecFromSubplotSpec(
+                len(forces), len(sigmas),
+                subplot_spec=outer_gs[v_idx, f_idx],
+                hspace=0.1, wspace=0.1
+            )
+            
+            # Add sigma values at the top of each column
+            for sigma_idx, sigma in enumerate(sigmas):
+                ax.text(sigma_idx/len(sigmas) + 1/(2*len(sigmas)), 1.02, 
+                       f'σ={sigma}', ha='center', va='bottom', fontsize=8)
+            
+            # Add force values on the left of each row
+            for force_idx, force in enumerate(forces):
+                ax.text(-0.02, 1 - (force_idx + 0.5)/len(forces), 
+                       f'F={force}', ha='right', va='center', fontsize=8)
+            
+            for force_idx, force in enumerate(forces):
+                for sigma_idx, sigma in enumerate(sigmas):
+                    inner_ax = fig.add_subplot(inner_gs[force_idx, sigma_idx])
+                    
+                    # Find the corresponding simulation folder
+                    sim_folder_pattern = f"Vision_arcs=5_first=10_last=20_visionLength={vision_length}_fov={fov}_force={force}_sigma={sigma}"
+                    sim_folders = [f for f in os.listdir(test_folder) 
+                                 if os.path.isdir(os.path.join(test_folder, f)) 
+                                 and sim_folder_pattern in f]
+                    
+                    if sim_folders:
+                        sim_folder = sim_folders[0]
+                        screenshot_path = os.path.join(test_folder, sim_folder, "step_1000.png")
+                        if os.path.exists(screenshot_path):
+                            # Read and crop image
+                            img = plt.imread(screenshot_path)
+                            h, w = img.shape[:2]
+                            crop_left = int(w * 0.2)
+                            crop_right = int(w * 0.8)
+                            crop_top = int(h * 0.1)
+                            crop_bottom = int(h * 0.9)
+                            cropped_img = img[crop_top:crop_bottom, crop_left:crop_right]
+                            inner_ax.imshow(cropped_img)
+                    
+                    inner_ax.axis('off')
+            
+            ax.axis('off')
+    
+    plt.suptitle('Final States for Different Parameter Combinations\n(5 arcs, 10-20 points)', y=0.95)
+    plt.tight_layout()
+    plt.savefig(os.path.join(results_folder, 'parameter_grid_screenshots.png'), 
+                dpi=300, bbox_inches='tight')
+    plt.close()
+
+def plot_test5(data_folder):
+    """Plot performance comparison with different sampling point configurations"""
+    test_folder = os.path.join(data_folder, "5_Sample_points_scaling_test")
+    results_folder = os.path.join(test_folder, "_Results")
+    if not os.path.exists(results_folder):
+        os.makedirs(results_folder)
+    
+    # Configurations to analyze
+    sampling_configs = [
+        {"arcs": 3, "first": 6, "last": 12, "force": 300, "sigma": 10, 
+         "label": "Minimal (~30 points, F=300, σ=10)"},
+        {"arcs": 5, "first": 10, "last": 20, "force": 180, "sigma": 4, 
+         "label": "Medium (~75 points, F=180, σ=4)"},
+        {"arcs": 8, "first": 16, "last": 32, "force": 120, "sigma": 4, 
+         "label": "High (~192 points, F=120, σ=4)"}
+    ]
+    
+    resolutions = [100, 200, 300, 400, 500]
+    agent_counts = [10, 30, 50]
+    
+    # Create performance comparison plots
+    fig, axes = plt.subplots(len(agent_counts), 1, figsize=(12, 15))
+    plt.subplots_adjust(hspace=0.4)
+    
+    for agent_idx, agent_count in enumerate(agent_counts):
+        ax = axes[agent_idx]
+        
+        for config in sampling_configs:
+            times = []
+            for resolution in resolutions:
+                pattern = f"Vision_arcs={config['arcs']}_first={config['first']}_last={config['last']}_force={config['force']}_sigma={config['sigma']}_resolution={resolution}_agents={agent_count}"
+                avg_time = 0
+                count = 0
+                
+                # Find matching simulation folders
+                for folder in os.listdir(test_folder):
+                    if pattern in folder:
+                        data_file = os.path.join(test_folder, folder, "data.csv")
+                        if os.path.exists(data_file):
+                            data = load_data(data_file)
+                            if data is not None:
+                                data, _ = data
+                                avg_time += data['TimeForInterval'].mean()
+                                count += 1
+                
+                if count > 0:
+                    times.append(avg_time / count)
+                else:
+                    times.append(np.nan)
+            
+            ax.plot(resolutions, times, marker='o', label=config['label'])
+        
+        ax.set_title(f'Performance Scaling with {agent_count} Agents')
+        ax.set_xlabel('Resolution')
+        ax.set_ylabel('Average Time per Step (ms)')
+        ax.grid(True)
+        ax.legend()
+    
+    plt.suptitle('Performance Comparison with Different Sampling Configurations', y=0.95)
+    plt.savefig(os.path.join(results_folder, 'sampling_performance_comparison.png'), 
+                dpi=300, bbox_inches='tight')
+    plt.close()
+
+def plot_test6(data_folder):
+    """Plot performance comparison with different sampling point configurations"""
+    test_folder = os.path.join(data_folder, "5_Performance_with_varying_agent_count_and_Resolution")
+    results_folder = os.path.join(test_folder, "_Results")
+    create_screenshot_grid(data_folder)
+    create_combined_heatmap(data_folder)
+    create_performance_comparison(data_folder)
+    create_combined_time_series(data_folder) 
+
 if __name__ == "__main__":
     # Look for data in Unity's default location
     data_folder = "../ExperimentData"
@@ -1172,7 +1435,14 @@ if __name__ == "__main__":
         print(f"Creating data folder: {os.path.abspath(data_folder)}")
         os.makedirs(data_folder)
     
-    create_screenshot_grid(data_folder)
-    create_combined_heatmap(data_folder)
-    create_performance_comparison(data_folder)
-    create_combined_time_series(data_folder) 
+    #create_screenshot_grid(data_folder)
+    #create_combined_heatmap(data_folder)
+    #create_performance_comparison(data_folder)
+    #create_combined_time_series(data_folder) 
+    #plot_test1(data_folder)
+    #plot_test2(data_folder)
+    #plot_test3(data_folder)
+    plot_test4(data_folder)
+    plot_test3_small(data_folder)
+    plot_test5(data_folder)
+    plot_test6(data_folder)

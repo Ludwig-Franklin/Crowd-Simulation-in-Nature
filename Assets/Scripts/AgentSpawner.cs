@@ -623,4 +623,15 @@ public class AgentSpawner : MonoBehaviour
         // Reset the agent's previous position for Verlet integration
         agent.previousPosition = newPosition;
     }
+
+    public void SpawnAgentsWithConfig(SimulationConfig config)
+    {
+        // Set the vision parameters from config
+        visionLength = config.visionLength;
+        fieldOfView = config.fieldOfView;
+        agentAmount = config.agentCount;
+        
+        // Spawn the agents
+        SpawnAgents();
+    }
 } 

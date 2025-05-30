@@ -12,7 +12,8 @@ public enum TestType
     I_and_T_values_for_different_trails,
     Force_and_Sigma_Values_to_match_paths,
     Sample_points_paired_with_forces_and_sigmas,
-    Performance_with_varying_agent_count_and_Resolution
+    Performance_with_varying_agent_count_and_Resolution,
+    Sample_points_scaling_test
 }
 
 [System.Serializable]
@@ -25,47 +26,6 @@ public class TestConfiguration
 
 public class ExperimentManager : MonoBehaviour
 {
-    [System.Serializable]
-    public class SimulationConfig
-    {
-        public int agentCount = 30;
-        public int simulationSteps = 2000;
-        public bool runHelbing = false;
-        public bool runVision = false;
-        
-        // Force Settings
-        public float goalForceStrength = 10f;
-        public float agentRepulsionForce = 0f;
-        public float agentRepulsionRadius = 0f;
-        
-        // Path Following Forces
-        public float pathFollowStrength = 1f;  // Helbing's method
-        public float HelbingsDistanceFactor_sigma = 5f;
-        public float visualPathFollowStrength = 10f;  // Vision-based method
-        public float VisualDistanceFactor_sigma = 5f;
-        
-        // Movement Settings
-        public float agentMaxSpeed_v0 = 10.0f;
-        public float relaxationTime_tau = 0.1f;
-        
-        // Vision Sampling Settings
-        public int visionArcCount = 10;
-        public int firstArcPointCount = 20;
-        public int lastArcPointCount = 40;
-        public float fieldOfView = 120f;
-        
-        // Trail Settings
-        public float trailWidth = 3.0f;
-        public float trailRecoveryRate_T = 10f;
-        public float footstepIntensity_I = 5f;
-        public float maxComfortLevel = 20.0f;
-        
-        // Resolution
-        public int textureResolution = 100;
-
-        public string experimentName = "experiment_1";
-    }
-
     [Header("Experiment Settings")]
     public List<SimulationConfig> simulationConfigs = new List<SimulationConfig>();
     public bool runExperiment = false;
@@ -162,24 +122,7 @@ public class ExperimentManager : MonoBehaviour
 
             // Setup the test configurations
             simulationConfigs.Clear();
-            switch (testConfig.testType)
-            {
-                case TestType.Custom:
-                    // Use existing configuration
-                    break;
-                case TestType.I_and_T_values_for_different_trails:
-                    SetupTest1();
-                    break;
-                case TestType.Force_and_Sigma_Values_to_match_paths:
-                    SetupTest2();
-                    break;
-                case TestType.Sample_points_paired_with_forces_and_sigmas:
-                    SetupTest3();
-                    break;
-                case TestType.Performance_with_varying_agent_count_and_Resolution:
-                    SetupTest4();
-                    break;
-            }
+            SetupTest(testConfig.testType);
 
             UpdateStatusText($"Running test: {testConfig.testName}", Color.green);
             
@@ -570,7 +513,7 @@ public class ExperimentManager : MonoBehaviour
             TValues[i] = i + 1;
             IValues[i] = i + 1;
         }
-        int repetitionsPerConfig = 5;  // Number of repetitions for each configuration
+        int repetitionsPerConfig = 1;  // Number of repetitions for each configuration
 
         foreach (float T in TValues)
         {
@@ -599,14 +542,15 @@ public class ExperimentManager : MonoBehaviour
     {
         simulationConfigs.Clear();
         currentTestName = "2_Force_and_Sigma_Values_to_match_paths";
-        float[] helbingForces = { 0.5f, 1f, 2f, 3f, 4f, 5f, 6f };
-        float[] visualForces = { 60f, 80f, 100f, 120f, 140f, 160f, 180f, 200f };
-        float[] sigmaValues = { 1f, 2f, 3f, 4f, 5f, 6f, 7f, 8f, 9f, 10f };
-        int repetitionsPerConfig = 5;  // Number of repetitions for each configuration
+        float[] helbingForces = { 0.5f, 1f, 2f, 3f, 4f };
+        float[] visualForces = {400f, 425f, 450f, 475f, 500f};
+        float[] sigmaValues_Helbing = {4, 5, 6, 7, 8, 9, 10};
+        float[] sigmaValues_Vision = {10, 11, 12, 13, 14, 15};
+        int repetitionsPerConfig = 3;  // Number of repetitions for each configuration
 
         foreach (float force in helbingForces)
         {
-            foreach (float sigma in sigmaValues)
+            foreach (float sigma in sigmaValues_Helbing)
             {
                 // Run each configuration multiple times
                 for (int index = 1; index <= repetitionsPerConfig; index++)
@@ -628,7 +572,7 @@ public class ExperimentManager : MonoBehaviour
 
         foreach (float force in visualForces)
         {
-            foreach (float sigma in sigmaValues)
+            foreach (float sigma in sigmaValues_Vision)
             {
                 // Run each configuration multiple times
                 for (int index = 1; index <= repetitionsPerConfig; index++)
@@ -652,50 +596,55 @@ public class ExperimentManager : MonoBehaviour
     public void SetupTest3()
     {
         simulationConfigs.Clear();
-        currentTestName = "3_Sample_points_paired_with_forces_and_sigmas";
+        currentTestName = "3_Sample_points_paired_with_forces_and_sigmas_small";
         
-        // Each array contains: [arcCount, firstArc, lastArc, baseForce]
+        // Each array contains: [arcCount, firstArc, lastArc]
         var samplingConfigs = new (int[] config, float[] forces)[]
         {
-            // Small sampling (5, 10, 20) - base force 120
-            (new int[] { 5, 10, 20 }, new float[] { 100f, 110f, 120f, 130f, 140f }),
             
-            // Medium sampling (10, 20, 40) - base force 30
-            (new int[] { 10, 20, 40 }, new float[] { 20f, 25f, 30f, 35f, 40f }),
+            (new int[] { 5, 10, 20 }, new float[] { 
+                200f, 225f, 250f, 275f, 300f, 325f, 350f, 375f, 400f, 425f 
+            })
             
-            // Large sampling (15, 30, 60) - base force 13
-            (new int[] { 15, 30, 60 }, new float[] { 9f, 11f, 13f, 15f, 17f })
         };
 
-        float[] sigmaValues = { 2f, 5f, 6f, 8f, 10f, 12f, 15f, 20f };
-        int repetitionsPerConfig = 5;  // Number of repetitions for each configuration
+        // Vision lengths to test around known good value
+        float[] visionLengths = {30f, 40f, 50f};
+        
+        // Field of view angles focused on wider angles
+        float[] fovValues = { 120f, 180f };
+        
+        // Create array with sigma values focused around 10
+        float[] sigmaValues = { 2f, 4f, 6f, 8f, 10f, 12f, 14f, 16f, 18f, 20f };
+        
 
-        // For each sampling configuration
         foreach (var (config, forces) in samplingConfigs)
         {
-            // For each force variation
-            foreach (float force in forces)
+            foreach (float visionLength in visionLengths)
             {
-                // For each sigma value
-                foreach (float sigma in sigmaValues)
+                foreach (float fov in fovValues)
                 {
-                    // Run each configuration multiple times
-                    for (int index = 1; index <= repetitionsPerConfig; index++)
+                    foreach (float force in forces)
                     {
-                        SimulationConfig simConfig = new SimulationConfig
+                        foreach (float sigma in sigmaValues)
                         {
-                            visionArcCount = config[0],
-                            firstArcPointCount = config[1],
-                            lastArcPointCount = config[2],
-                            visualPathFollowStrength = force,
-                            VisualDistanceFactor_sigma = sigma,
-                            simulationSteps = 2000,
-                            agentCount = 30,
-                            runHelbing = false,
-                            runVision = true,
-                            experimentName = $"Vision_arcs={config[0]}_first={config[1]}_last={config[2]}_force={force}_sigma={sigma}_repetition={index}"
-                        };
-                        simulationConfigs.Add(simConfig);
+                                SimulationConfig simConfig = new SimulationConfig
+                                {
+                                    visionArcCount = config[0],
+                                    firstArcPointCount = config[1],
+                                    lastArcPointCount = config[2],
+                                    visionLength = visionLength,
+                                    fieldOfView = fov,
+                                    visualPathFollowStrength = force,
+                                    VisualDistanceFactor_sigma = sigma,
+                                    simulationSteps = 1000,
+                                    agentCount = 30,
+                                    runHelbing = false,
+                                    runVision = true,
+                                    experimentName = $"Vision_arcs={config[0]}_first={config[1]}_last={config[2]}_visionLength={visionLength}_fov={fov}_force={force}_sigma={sigma}"
+                                };
+                                simulationConfigs.Add(simConfig);
+                        }
                     }
                 }
             }
@@ -706,8 +655,8 @@ public class ExperimentManager : MonoBehaviour
     {
         simulationConfigs.Clear();
         currentTestName = "4_Performance_with_varying_agent_count_and_Resolution";
-        int[] resolutions = { 100, 200, 300};
-        int[] agentCounts = { 1, 10, 20, 30, 40};
+        int[] resolutions = { 100, 200, 300, 400, 500, 600, 700};
+        int[] agentCounts = { 1, 10, 20, 30, 40, 50, 60, 70 };
         int repetitionsPerConfig = 3;
 
         foreach (int resolution in resolutions)
@@ -739,6 +688,8 @@ public class ExperimentManager : MonoBehaviour
                         visionArcCount = 5,
                         firstArcPointCount = 10,
                         lastArcPointCount = 20,
+                        visionLength = 40f,
+                        fieldOfView = 180f,
                         visualPathFollowStrength = 180f,
                         VisualDistanceFactor_sigma = 4f,
                         textureResolution = resolution,
@@ -751,6 +702,80 @@ public class ExperimentManager : MonoBehaviour
                     simulationConfigs.Add(visionConfig);
                 }
             }
+        }
+    }
+
+    public void SetupTest5()
+    {
+        simulationConfigs.Clear();
+        currentTestName = "5_Sample_points_scaling_test";
+        
+        // Sample point configurations (arcCount, firstArc, lastArc, force, sigma)
+        var samplingConfigs = new (int arcs, int first, int last, float force, float sigma)[]
+        {
+            (3, 5, 5, 1000f, 12f),    // Minimal sampling (30 points) - Higher force to compensate
+            (5, 10, 20, 425f, 12f),    // Medium sampling (75 points) - Known good configuration
+            (10, 20, 20, 100f, 12f),     // High sampling (200 points) - Lower force due to more points
+            (20, 50, 50, 20f, 12f)      // Very high sampling (1000 points) - Lower force due to more points
+        };
+        
+        int[] resolutions = { 100, 200, 300, 400, 500, 600, 700 };
+        int[] agentCounts = {1, 10, 30, 50, 70, 90 };
+        int repetitionsPerConfig = 3;
+
+        foreach (var (arcs, first, last, force, sigma) in samplingConfigs)
+        {
+            foreach (int resolution in resolutions)
+            {
+                foreach (int agentCount in agentCounts)
+                {
+                    for (int index = 1; index <= repetitionsPerConfig; index++)
+                    {
+                        SimulationConfig visionConfig = new SimulationConfig
+                        {
+                            goalForceStrength = 10f,
+                            visionArcCount = arcs,
+                            firstArcPointCount = first,
+                            lastArcPointCount = last,
+                            visionLength = 40f,
+                            fieldOfView = 180f,
+                            visualPathFollowStrength = force,
+                            VisualDistanceFactor_sigma = sigma,
+                            textureResolution = resolution,
+                            simulationSteps = 1000,
+                            agentCount = agentCount,
+                            runHelbing = false,
+                            runVision = true,
+                            experimentName = $"Vision_arcs={arcs}_first={first}_last={last}_force={force}_sigma={sigma}_resolution={resolution}_agents={agentCount}_repetition={index}"
+                        };
+                        simulationConfigs.Add(visionConfig);
+                    }
+                }
+            }
+        }
+    }
+
+    public void SetupTest(TestType testType)
+    {
+        switch (testType)
+        {
+            case TestType.Custom:
+                break;
+            case TestType.I_and_T_values_for_different_trails:
+                SetupTest1();
+                break;
+            case TestType.Force_and_Sigma_Values_to_match_paths:
+                SetupTest2();
+                break;
+            case TestType.Sample_points_paired_with_forces_and_sigmas:
+                SetupTest3();
+                break;
+            case TestType.Performance_with_varying_agent_count_and_Resolution:
+                SetupTest4();
+                break;
+            case TestType.Sample_points_scaling_test:
+                SetupTest5();
+                break;
         }
     }
 } 
