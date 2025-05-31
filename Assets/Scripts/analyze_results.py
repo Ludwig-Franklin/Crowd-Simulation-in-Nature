@@ -113,28 +113,30 @@ def create_test1_time_series(data_folder, test_name, metrics):
                 # Check if this is the folder we want
                 if f"_repetition=1_index={expected_index}" in folder:
                     data_paths[(T, I)] = os.path.join(test_folder, folder, "data.csv")
-                    print(f"✓ Found folder: {folder}")
             except Exception as e:
                 print(f"Error processing folder {folder}: {e}")
                 continue
     
     print(f"\nFound {len(data_paths)} valid data paths out of expected 400")
     
-    fig, axes = plt.subplots(len(metrics), 1, figsize=(30, 8*len(metrics)))
+    fig, axes = plt.subplots(len(metrics), 1, figsize=(30, 16*len(metrics)))
     if len(metrics) == 1:
         axes = [axes]
     
-    # Create a color map for all T,I combinations
-    colors = plt.cm.viridis(np.linspace(0, 1, 400))
-    color_idx = 0
-    line_styles = {}  # Store line styles for consistent plotting
+    # Create color gradients
+    T_colors = plt.cm.RdYlGn(np.linspace(0, 1, 20))  # Red to Green for T values
+    I_colors = plt.cm.Blues(np.linspace(0.3, 1, 20))  # Blues for I values
+    
+    # Store line styles for consistent plotting
+    line_styles = {}
     
     for metric_idx, metric in enumerate(metrics):
         ax = axes[metric_idx]
         plotted_count = 0
         
         # Plot a line for each T/I combination
-        for T in range(1, 21):
+        # Reverse the order of T to make T=1 at the top
+        for T in range(20, 0, -1):  # Changed to count down from 20 to 1
             for I in range(1, 21):
                 expected_index = ((T-1) * 20) + I
                 expected_folder = f"Helbing_T={T}_I={I}_repetition=1_index={expected_index}"
@@ -145,11 +147,14 @@ def create_test1_time_series(data_folder, test_name, metrics):
                         data_df, _ = result
                         if len(data_df) >= 20:
                             steps = range(100, 2100, 100)
-                            label = f'T={T},I={I}' if metric_idx == 0 else None  # Only label in first plot
+                            label = f'T={T},I={I}' if metric_idx == 0 else None
                             
                             if (T,I) not in line_styles:
-                                line_styles[(T,I)] = {'color': colors[color_idx], 'alpha': 0.5}
-                                color_idx += 1
+                                # Blend T and I colors
+                                T_color = T_colors[T-1]
+                                I_color = I_colors[I-1]
+                                blended_color = (T_color + I_color) / 2
+                                line_styles[(T,I)] = {'color': blended_color, 'alpha': 0.5}
                             
                             ax.plot(steps, data_df[metric], 
                                   label=label, **line_styles[(T,I)])
@@ -166,13 +171,24 @@ def create_test1_time_series(data_folder, test_name, metrics):
         ax.set_ylabel(metric)
         ax.grid(True)
         
+        # Crop the plot by adjusting the axis limits
+        xmin, xmax = ax.get_xlim()
+        ymin, ymax = ax.get_ylim()
+        x_range = xmax - xmin
+        y_range = ymax - ymin
+        
+        # Apply 25% crop on left and right, 10% on top and bottom
+        ax.set_xlim(xmin + x_range * 0.25, xmax - x_range * 0.25)
+        ax.set_ylim(ymin + y_range * 0.10, ymax - y_range * 0.10)
+        
         if metric_idx == 0 and plotted_count > 0:  # Only add legend to first plot
-            ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left', 
-                     ncol=10, borderaxespad=0.)  # Changed from 20 to 10 columns
+            # Move legend to top of plot
+            ax.legend(bbox_to_anchor=(0.5, 1.4), loc='center', 
+                     ncol=4, borderaxespad=0.)
     
-    # Adjust figure size to accommodate the wide legend with 40 rows
-    plt.gcf().set_size_inches(30, 16*len(metrics))  # Made taller to accommodate more rows
-    plt.tight_layout()
+    # Adjust figure size and add more space at top for legend
+    plt.gcf().set_size_inches(30, 28*len(metrics))  # Made taller to accommodate top legend
+    plt.subplots_adjust(top=0.85)  # Leave more space at top for legend
     plt.savefig(os.path.join(results_folder, '1_metrics_time_series.png'), 
                 dpi=300, bbox_inches='tight')
     plt.close()
@@ -211,13 +227,22 @@ def create_screenshot_grid(data_folder, test_name, pattern_groups, title, filena
                 
                 if screenshot_path:
                     img = plt.imread(screenshot_path)
-                    ax.imshow(img)
+                    
+                    # Crop the image
+                    h, w = img.shape[:2]
+                    left = int(w * 0.25)
+                    right = int(w * 0.75)
+                    top = int(h * 0.10)
+                    bottom = int(h * 0.90)
+                    cropped_img = img[top:bottom, left:right]
+                    
+                    ax.imshow(cropped_img)
                 else:
                     ax.text(0.5, 0.5, "No image", ha='center', va='center')
                 
-                # Only show axis labels for bottom and left edges
-                if T == 20:  # Bottom row
-                    ax.set_xlabel(f'I={I}')
+                # Show I values on top row, T values on left column
+                if T == 1:  # Top row
+                    ax.set_title(f'I={I}')
                 if I == 1:   # Left column
                     ax.set_ylabel(f'T={T}')
                 
