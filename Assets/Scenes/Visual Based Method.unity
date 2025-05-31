@@ -1489,10 +1489,10 @@ MonoBehaviour:
     enabled: 1
   - testName: 
     testType: 1
-    enabled: 1
+    enabled: 0
   - testName: 
     testType: 2
-    enabled: 1
+    enabled: 0
 --- !u!1001 &1782644141
 PrefabInstance:
   m_ObjectHideFlags: 0

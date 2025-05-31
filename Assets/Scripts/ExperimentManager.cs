@@ -723,6 +723,30 @@ public class ExperimentManager : MonoBehaviour
         int[] agentCounts = {1, 10, 30, 50, 70, 90 };
         int repetitionsPerConfig = 3;
 
+        // First add all Helbing's method configurations
+        foreach (int resolution in resolutions)
+        {
+            foreach (int agentCount in agentCounts)
+            {
+                for (int index = 1; index <= repetitionsPerConfig; index++)
+                {
+                    SimulationConfig helbingConfig = new SimulationConfig
+                    {
+                        goalForceStrength = 10f,
+                        pathFollowStrength = 2f,
+                        HelbingsDistanceFactor_sigma = 7f,
+                        textureResolution = resolution,
+                        simulationSteps = 1000,
+                        agentCount = agentCount,
+                        runHelbing = true,
+                        runVision = false,
+                        experimentName = $"Helbing_resolution={resolution}_agents={agentCount}_repetition={index}"
+                    };
+                    simulationConfigs.Add(helbingConfig);
+                }
+            }
+        }
+        // Then add all vision-based configurations
         foreach (var (arcs, first, last, force, sigma) in samplingConfigs)
         {
             foreach (int resolution in resolutions)
@@ -742,7 +766,7 @@ public class ExperimentManager : MonoBehaviour
                             visualPathFollowStrength = force,
                             VisualDistanceFactor_sigma = sigma,
                             textureResolution = resolution,
-                            simulationSteps = 1000,
+                            simulationSteps = 2000,
                             agentCount = agentCount,
                             runHelbing = false,
                             runVision = true,
