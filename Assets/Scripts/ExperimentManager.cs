@@ -542,31 +542,27 @@ public class ExperimentManager : MonoBehaviour
     {
         simulationConfigs.Clear();
         currentTestName = "2_Force_and_Sigma_Values_to_match_paths";
-        float[] helbingForces = { 0.5f, 1f, 2f, 3f, 4f };
-        float[] visualForces = {400f, 425f, 450f, 475f, 500f};
-        float[] sigmaValues_Helbing = {4, 5, 6, 7, 8, 9, 10};
-        float[] sigmaValues_Vision = {10, 11, 12, 13, 14, 15};
-        int repetitionsPerConfig = 3;  // Number of repetitions for each configuration
+        float[] helbingForces = { 0.5f, 1f, 1.5f, 1.75f, 2f, 2.5f, 2.75f, 3f, 4f };
+        float[] visualForces = {175f, 200f, 225f, 375f, 400f, 425f, 675f, 700f, 725f };
+        float[] sigmaValues_Helbing = {4, 5, 6, 7, 8, 9, 10, 11, 12};
+        float[] sigmaValues_Vision = {4, 5, 6, 11, 12, 13, 19, 20, 21};
 
         foreach (float force in helbingForces)
         {
             foreach (float sigma in sigmaValues_Helbing)
             {
-                // Run each configuration multiple times
-                for (int index = 1; index <= repetitionsPerConfig; index++)
+                SimulationConfig config = new SimulationConfig
                 {
-                    SimulationConfig config = new SimulationConfig
-                    {
-                        pathFollowStrength = force,
-                        HelbingsDistanceFactor_sigma = sigma,
-                        simulationSteps = 2000,
-                        agentCount = 30,
-                        runHelbing = true,
-                        runVision = false,
-                        experimentName = $"Helbing_force={force}_sigma={sigma}_repetition={index}"
-                    };
-                    simulationConfigs.Add(config);
-                }
+                    pathFollowStrength = force,
+                    HelbingsDistanceFactor_sigma = sigma,
+                    simulationSteps = 2000,
+                    agentCount = 30,
+                    runHelbing = true,
+                    runVision = false,
+                    experimentName = $"Helbing_force={force}_sigma={sigma}"
+                };
+                simulationConfigs.Add(config);
+        
             }
         }
 
@@ -574,21 +570,22 @@ public class ExperimentManager : MonoBehaviour
         {
             foreach (float sigma in sigmaValues_Vision)
             {
-                // Run each configuration multiple times
-                for (int index = 1; index <= repetitionsPerConfig; index++)
+                SimulationConfig config = new SimulationConfig
                 {
-                    SimulationConfig config = new SimulationConfig
-                    {
-                        visualPathFollowStrength = force,
-                        VisualDistanceFactor_sigma = sigma,
-                        simulationSteps = 2000,
-                        agentCount = 30,
-                        runHelbing = false,
-                        runVision = true,
-                        experimentName = $"Vision_force={force}_sigma={sigma}_repetition={index}"
-                    };
-                    simulationConfigs.Add(config);
-                }
+                    visualPathFollowStrength = force,
+                    VisualDistanceFactor_sigma = sigma,
+                    visionArcCount = 5,
+                    firstArcPointCount = 10,
+                    lastArcPointCount = 20,
+                    visionLength = 40f,
+                    fieldOfView = 180f,
+                    simulationSteps = 2000,
+                    agentCount = 30,
+                    runHelbing = false,
+                    runVision = true,
+                    experimentName = $"Vision_force={force}_sigma={sigma}"
+                };
+                simulationConfigs.Add(config);
             }
         }
     }

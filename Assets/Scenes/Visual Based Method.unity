@@ -1385,14 +1385,14 @@ MonoBehaviour:
   agentRepulsionRadius: 1.5
   pathFollowStrength: 2
   HelbingsDistanceFactor_sigma: 7
-  visualPathFollowStrength: 20
-  VisualDistanceFactor_sigma: 12
+  visualPathFollowStrength: 200
+  VisualDistanceFactor_sigma: 5
   agentMaxSpeed_v0: 15
   relaxationTime_tau: 0.1
   currentPathFollowingMethod: 1
-  visionArcCount: 20
-  firstArcPointCount: 50
-  lastArcPointCount: 50
+  visionArcCount: 5
+  firstArcPointCount: 10
+  lastArcPointCount: 20
   showForces: 1
   showSampledPoints: 1
   trailWidth: 3
@@ -1486,13 +1486,13 @@ MonoBehaviour:
   testsToRun:
   - testName: 
     testType: 5
-    enabled: 1
+    enabled: 0
   - testName: 
     testType: 1
     enabled: 0
   - testName: 
     testType: 2
-    enabled: 0
+    enabled: 1
 --- !u!1001 &1782644141
 PrefabInstance:
   m_ObjectHideFlags: 0
