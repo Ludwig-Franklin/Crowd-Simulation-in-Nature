@@ -1387,7 +1387,7 @@ MonoBehaviour:
   HelbingsDistanceFactor_sigma: 7
   visualPathFollowStrength: 200
   VisualDistanceFactor_sigma: 5
-  agentMaxSpeed_v0: 15
+  agentMaxSpeed_v0: 5
   relaxationTime_tau: 0.1
   currentPathFollowingMethod: 1
   visionArcCount: 5
@@ -1468,7 +1468,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   simulationConfigs: []
-  runExperiment: 1
+  runExperiment: 0
   currentSimulationIndex: 0
   currentMethodIndex: 0
   currentStep: 0

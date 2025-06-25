@@ -130,43 +130,55 @@ def create_test1_time_series(data_folder, test_name, metrics):
     if len(metrics) == 1:
         axes = [axes]
     
-    # Create distinct colors for each T value
-    T_colors = [
-        '#FF0000',  # Red
-        '#FF4000',  # Orange-Red
-        '#FF8000',  # Orange
-        '#FFC000',  # Orange-Yellow
-        '#FFFF00',  # Yellow
-        '#C0FF00',  # Yellow-Green
-        '#80FF00',  # Light Green
-        '#40FF00',  # Lime Green
-        '#00FF00',  # Green
-        '#00FF40',  # Green-Cyan
-        '#00FF80',  # Light Cyan
-        '#00FFC0',  # Cyan
-        '#00FFFF',  # Cyan
-        '#00C0FF',  # Light Blue
-        '#0080FF',  # Blue
-        '#0040FF',  # Deep Blue
-        '#0000FF',  # Pure Blue
-        '#4000FF',  # Blue-Purple
-        '#8000FF',  # Purple
-        '#C000FF',  # Violet
+    # Create distinct color scheme following Simulator color progression: Red → Yellow → Green → Cyan → Blue → Magenta → Pink
+    # Use 7 distinct color families for better differentiation, avoiding orange
+    import matplotlib.colors as mcolors
+    
+    # Define custom color families based on simulator colors - using explicit color values
+    def create_single_color_cmap(color):
+        """Create a colormap from light to dark version of the color"""
+        return mcolors.LinearSegmentedColormap.from_list("", ["#F0F0F0", color])
+    
+    T_color_families = [
+        create_single_color_cmap('#FF0000'),    # T 1-3: Red
+        create_single_color_cmap('#FFFF00'),    # T 4-6: Yellow  
+        create_single_color_cmap('#00FF00'),    # T 7-9: Green
+        create_single_color_cmap('#00FFFF'),    # T 10-12: Cyan
+        create_single_color_cmap('#0000FF'),    # T 13-15: Blue
+        create_single_color_cmap('#FF00FF'),    # T 16-18: Magenta
+        create_single_color_cmap('#FF0080')     # T 19-20: Pink
     ]
     
-    # Create distinct colors for I values (will be blended)
-    I_colors = plt.cm.rainbow(np.linspace(0, 1, 20))
+    # Define line styles for different I ranges
+    I_linestyles = ['-', '--', '-.', ':', (0, (3, 1, 1, 1))]  # solid, dashed, dashdot, dotted, densely dashdotdotted
     
     # Store line styles
     line_styles = {}
     
-    # Pre-calculate all colors and sort by T value
+    # Pre-calculate all styles 
     for T in range(1, 21):
         for I in range(1, 21):
-            T_color = np.array(matplotlib.colors.to_rgba(T_colors[T-1]))
-            I_color = I_colors[I-1]
-            blended_color = (T_color + I_color) / 2
-            line_styles[(T,I)] = {'color': blended_color, 'alpha': 0.7}
+            # Determine color family based on T value (0-6 index for 7 families)
+            T_family_idx = min(6, (T-1) // 3)  # Groups of 3: 1-3, 4-6, 7-9, 10-12, 13-15, 16-18, 19-20
+            color_family = T_color_families[T_family_idx]
+            
+            # Get color intensity within family based on T position within group
+            T_within_group = ((T-1) % 3) / 3.0  # 0.0 to 0.67 for groups of 3
+            color_intensity = 0.4 + T_within_group * 0.6  # 0.4 to 1.0
+            T_color = color_family(color_intensity)
+            
+            # Determine linestyle based on I value (0-4 index) 
+            I_style_idx = min(4, (I-1) // 4)
+            linestyle = I_linestyles[I_style_idx]
+            
+            # Alpha based on I value - higher I = more opaque
+            alpha = 0.3 + (I-1) * 0.7 / 19  # 0.3 to 1.0
+            
+            line_styles[(T,I)] = {
+                'color': T_color, 
+                'alpha': alpha,
+                'linestyle': linestyle
+            }
     
     for metric_idx, metric in enumerate(metrics):
         ax = axes[metric_idx]
@@ -206,7 +218,7 @@ def create_test1_time_series(data_folder, test_name, metrics):
                         if len(data_df) >= 20:
                             steps = range(100, 2100, 100)
                             ax.plot(steps, data_df[metric], 
-                                   **line_styles[(T,I)], linewidth=1.5)  # Thicker lines
+                                   **line_styles[(T,I)], linewidth=2)  # Thicker lines
                             plotted_count += 1
                         else:
                             print(f"✗ Not enough data points in: {expected_folder}")
@@ -226,8 +238,8 @@ def create_test1_time_series(data_folder, test_name, metrics):
         
         # Set x-axis to full range (0 to 2000)
         ax.set_xlim(0, 2000)
-    
-    # Remove legend - no longer needed
+
+    # Color guide removed - explanation will be in thesis text
     plt.tight_layout()
     
     plt.savefig(os.path.join(results_folder, '1_metrics_time_series.png'), 
@@ -265,18 +277,53 @@ def create_test1_time_series_filtered(data_folder, test_name, metrics):
     if len(metrics) == 1:
         axes = [axes]
     
-    # Create distinct colors for T values
-    T_colors = plt.cm.rainbow(np.linspace(0, 1, 20))
-    I_colors = plt.cm.rainbow(np.linspace(0, 1, 20))
+    # Create distinct color scheme following Simulator color progression: Red → Yellow → Green → Cyan → Blue → Magenta → Pink
+    # Use 7 distinct color families for better differentiation, avoiding orange
+    import matplotlib.colors as mcolors
+    
+    # Define custom color families based on simulator colors - using explicit color values
+    def create_single_color_cmap(color):
+        """Create a colormap from light to dark version of the color"""
+        return mcolors.LinearSegmentedColormap.from_list("", ["#F0F0F0", color])
+    
+    T_color_families = [
+        create_single_color_cmap('#FF0000'),    # T 1-3: Red
+        create_single_color_cmap('#FFFF00'),    # T 4-6: Yellow  
+        create_single_color_cmap('#00FF00'),    # T 7-9: Green
+        create_single_color_cmap('#00FFFF'),    # T 10-12: Cyan
+        create_single_color_cmap('#0000FF'),    # T 13-15: Blue
+        create_single_color_cmap('#FF00FF'),    # T 16-18: Magenta
+        create_single_color_cmap('#FF0080')     # T 19-20: Pink
+    ]
+    
+    # Define line styles for different I ranges
+    I_linestyles = ['-', '--', '-.', ':', (0, (3, 1, 1, 1))]  # solid, dashed, dashdot, dotted, densely dashdotdotted
     
     line_styles = {}
     
     for T in range(1, 21):
         for I in range(1, 21):
-            T_color = T_colors[T-1]
-            I_color = I_colors[I-1]
-            blended_color = (np.array(T_color) + np.array(I_color)) / 2
-            line_styles[(T,I)] = {'color': blended_color, 'alpha': 0.7}
+            # Determine color family based on T value (0-6 index for 7 families)
+            T_family_idx = min(6, (T-1) // 3)  # Groups of 3: 1-3, 4-6, 7-9, 10-12, 13-15, 16-18, 19-20
+            color_family = T_color_families[T_family_idx]
+            
+            # Get color intensity within family based on T position within group
+            T_within_group = ((T-1) % 3) / 3.0  # 0.0 to 0.67 for groups of 3
+            color_intensity = 0.4 + T_within_group * 0.6  # 0.4 to 1.0
+            T_color = color_family(color_intensity)
+            
+            # Determine linestyle based on I value (0-4 index) 
+            I_style_idx = min(4, (I-1) // 4)
+            linestyle = I_linestyles[I_style_idx]
+            
+            # Alpha based on I value - higher I = more opaque
+            alpha = 0.3 + (I-1) * 0.7 / 19  # 0.3 to 1.0
+            
+            line_styles[(T,I)] = {
+                'color': T_color, 
+                'alpha': alpha,
+                'linestyle': linestyle
+            }
 
     for metric_idx, metric in enumerate(metrics):
         ax = axes[metric_idx]
@@ -288,7 +335,7 @@ def create_test1_time_series_filtered(data_folder, test_name, metrics):
                 data_df, _ = result
                 if len(data_df) >= 20:
                     steps = range(100, 2100, 100)
-                    ax.plot(steps, data_df[metric], **line_styles[(T,I)], linewidth=1.5)  # Thicker lines
+                    ax.plot(steps, data_df[metric], **line_styles[(T,I)], linewidth=2)  # Thicker lines
                     plotted_count += 1
         
         print(f"\nPlotted {plotted_count} lines for {metric}")
@@ -300,9 +347,78 @@ def create_test1_time_series_filtered(data_folder, test_name, metrics):
         ax.tick_params(axis='both', which='major', labelsize=14)
         ax.set_xlim(0, 2000)
 
-    # Remove legend - no longer needed
+    # Color guide removed - explanation will be in thesis text
     plt.tight_layout()
     plt.savefig(os.path.join(results_folder, '1_metrics_time_series_with_Efficiency_over_60.png'), 
+                dpi=300, bbox_inches='tight')
+    plt.close()
+
+def create_test1_specific_time_series(data_folder, test_name, metrics):
+    """Create time series plots for specific T,I combinations"""
+    test_folder = os.path.join(data_folder, test_name)
+    results_folder = os.path.join(test_folder, "_Results")
+    
+    # Specific combinations to show
+    combinations = [
+        {'T': 9, 'I': 6, 'label': 'Well spread out agents (T=9, I=6)'},
+        {'T': 9, 'I': 7, 'label': 'Small change, big difference (T=9, I=7)'},
+        {'T': 11, 'I': 16, 'label': 'Extreme case (T=11, I=16)'},
+        {'T': 18, 'I': 7, 'label': 'Another extreme case (T=18, I=7)'}
+    ]
+    
+    # Create figure with subplots for each metric
+    fig, axes = plt.subplots(len(metrics), 1, figsize=(15, 8*len(metrics)))
+    if len(metrics) == 1:
+        axes = [axes]
+    
+    # Create distinct colors for each combination
+    colors = ['#2E8B57', '#FF6347', '#4169E1', '#FF8C00']  # Sea Green, Tomato, Royal Blue, Dark Orange
+    
+    for metric_idx, metric in enumerate(metrics):
+        ax = axes[metric_idx]
+        
+        for combo_idx, combo in enumerate(combinations):
+            T, I = combo['T'], combo['I']
+            expected_index = ((T-1) * 20) + I
+            expected_folder = f"Helbing_T={T}_I={I}_repetition=1_index={expected_index}"
+            
+            # Find matching folder
+            matching_folders = [f for f in os.listdir(test_folder) 
+                              if expected_folder in f and not f.endswith('.meta')]
+            
+            if matching_folders:
+                folder = matching_folders[0]
+                data_path = os.path.join(test_folder, folder, "data.csv")
+                
+                if os.path.exists(data_path):
+                    result = load_data(data_path)
+                    if result:
+                        data_df, _ = result
+                        if len(data_df) >= 20:
+                            steps = range(100, 2100, 100)
+                            ax.plot(steps, data_df[metric], 
+                                   color=colors[combo_idx], 
+                                   linewidth=3, 
+                                   label=combo['label'],
+                                   marker='o', 
+                                   markersize=4)
+                        else:
+                            print(f"✗ Not enough data points for: {combo['label']}")
+                else:
+                    print(f"✗ Missing data file for: {combo['label']}")
+            else:
+                print(f"✗ Missing folder for: {combo['label']}")
+        
+        ax.set_title(f'{metric} over Time - Specific Cases', fontsize=18)
+        ax.set_xlabel('Step', fontsize=16)
+        ax.set_ylabel(metric, fontsize=16)
+        ax.grid(True, alpha=0.3)
+        ax.tick_params(axis='both', which='major', labelsize=14)
+        ax.legend(fontsize=12, loc='best')
+        ax.set_xlim(0, 2000)
+    
+    plt.tight_layout()
+    plt.savefig(os.path.join(results_folder, '1_specific_cases_time_series.png'), 
                 dpi=300, bbox_inches='tight')
     plt.close()
 
@@ -310,8 +426,6 @@ def create_test1_specific_screenshot_grid(data_folder, test_name):
     """Create a focused screenshot grid with only specific T,I combinations"""
     test_folder = os.path.join(data_folder, test_name)
     results_folder = os.path.join(test_folder, "_Results")
-    if not os.path.exists(results_folder):
-        os.makedirs(results_folder)
     
     # Specific combinations to show
     combinations = [
@@ -321,45 +435,80 @@ def create_test1_specific_screenshot_grid(data_folder, test_name):
         {'T': 18, 'I': 7, 'label': 'Another extreme case\n(T=18, I=7)'}
     ]
     
-    # Create 2x2 grid
-    fig, axes = plt.subplots(2, 2, figsize=(16, 12))
-    axes = axes.flatten()
+    # Create figure with extra space for colorbar
+    fig = plt.figure(figsize=(18, 12))
     
-    for idx, combo in enumerate(combinations):
-        ax = axes[idx]
-        T, I = combo['T'], combo['I']
-        
-        # Find matching folder
-        expected_index = ((T-1) * 20) + I
-        pattern = f"Helbing_T={T}_I={I}_repetition=1_index={expected_index}"
-        
-        matching_folders = [f for f in os.listdir(test_folder) 
-                          if pattern in f and not f.endswith('.meta')]
-        
-        if matching_folders:
-            folder = matching_folders[0]
-            screenshot_path = os.path.join(test_folder, folder, "step_2000.png")
+    # Create 2x2 grid for images with some space for colorbar
+    gs = gridspec.GridSpec(2, 3, figure=fig, width_ratios=[1, 1, 0.15], wspace=0.3)
+    
+    # Create subplot for each combination
+    for i in range(2):
+        for j in range(2):
+            idx = i * 2 + j
+            combo = combinations[idx]
+            ax = plt.Subplot(fig, gs[i, j])
+            fig.add_subplot(ax)
             
-            if os.path.exists(screenshot_path):
-                img = plt.imread(screenshot_path)
-                # Crop the image
-                h, w = img.shape[:2]
-                left = int(w * 0.25)
-                right = int(w * 0.75)
-                top = int(h * 0.10)
-                bottom = int(h * 0.90)
-                cropped_img = img[top:bottom, left:right]
-                ax.imshow(cropped_img)
+            T, I = combo['T'], combo['I']
+            
+            # Find matching folder
+            expected_index = ((T-1) * 20) + I
+            pattern = f"Helbing_T={T}_I={I}_repetition=1_index={expected_index}"
+            
+            matching_folders = [f for f in os.listdir(test_folder) 
+                              if pattern in f and not f.endswith('.meta')]
+            
+            if matching_folders:
+                folder = matching_folders[0]
+                screenshot_path = os.path.join(test_folder, folder, "step_2000.png")
+                
+                if os.path.exists(screenshot_path):
+                    img = plt.imread(screenshot_path)
+                    # Crop the image
+                    h, w = img.shape[:2]
+                    left = int(w * 0.25)
+                    right = int(w * 0.75)
+                    top = int(h * 0.10)
+                    bottom = int(h * 0.90)
+                    cropped_img = img[top:bottom, left:right]
+                    ax.imshow(cropped_img)
+                else:
+                    ax.text(0.5, 0.5, "No screenshot found", ha='center', va='center', fontsize=14)
             else:
-                ax.text(0.5, 0.5, "No screenshot found", ha='center', va='center', fontsize=14)
-        else:
-            ax.text(0.5, 0.5, "No matching folder found", ha='center', va='center', fontsize=14)
-        
-        ax.set_title(combo['label'], fontsize=16, pad=10)
-        ax.set_xticks([])
-        ax.set_yticks([])
+                ax.text(0.5, 0.5, "No matching folder found", ha='center', va='center', fontsize=14)
+            
+            ax.set_title(combo['label'], fontsize=16, pad=10)
+            ax.set_xticks([])
+            ax.set_yticks([])
     
-    plt.tight_layout()
+    # Create colorbar on the right side spanning both rows
+    cbar_ax = plt.Subplot(fig, gs[:, 2])
+    fig.add_subplot(cbar_ax)
+    
+    # Create comfort map colorbar based on Unity gradient
+    comfort_colors = ['red', 'yellow', 'green', 'cyan', 'blue', 'magenta', '#ff0080']  # pink
+    comfort_levels = [0, 4, 8, 12, 16, 18, 20]
+    
+    # Create a custom colormap
+    from matplotlib.colors import LinearSegmentedColormap
+    cmap = LinearSegmentedColormap.from_list('comfort', comfort_colors, N=256)
+    
+    # Create gradient data for visualization
+    gradient = np.linspace(0, 20, 256).reshape(256, 1)
+    
+    # Display the gradient
+    cbar_ax.imshow(gradient, aspect='auto', cmap=cmap, extent=[0, 1, 0, 20])
+    cbar_ax.set_xlim(0, 1)
+    cbar_ax.set_ylim(0, 20)
+    
+    # Set ticks and labels
+    cbar_ax.set_yticks(comfort_levels)
+    cbar_ax.set_yticklabels(comfort_levels, fontsize=12)
+    cbar_ax.set_xticks([])
+    cbar_ax.set_ylabel('Comfort Level', fontsize=14, rotation=270, labelpad=20)
+    cbar_ax.yaxis.set_label_position('right')
+    cbar_ax.yaxis.tick_right()
+    
     plt.savefig(os.path.join(results_folder, '1_screenshot_grid_mini.png'),
                 dpi=300, bbox_inches='tight')
     plt.close()
@@ -368,8 +517,6 @@ def create_test1_comprehensive_screenshot_grid(data_folder, test_name):
     """Create comprehensive screenshot grid for Test 1 with all T,I combinations"""
     test_folder = os.path.join(data_folder, test_name)
     results_folder = os.path.join(test_folder, "_Results")
-    if not os.path.exists(results_folder):
-        os.makedirs(results_folder)
     
     # Create figure for 20x20 grid
     fig = plt.figure(figsize=(25, 25))
@@ -456,8 +603,6 @@ def create_test1_heatmap(data_folder, test_name, metrics):
     # Create figure with vertical stack (2 rows, 1 column) and much larger size
     fig, axes = plt.subplots(2, 1, figsize=(20, 28))  # Vertical stack, much larger
     
-    # Create and register the comfort colormap
-    comfort_cmap = create_comfort_colormap()
     
     for idx, metric in enumerate(metrics):
         data = np.zeros((20, 20))  # T x I grid
@@ -484,7 +629,7 @@ def create_test1_heatmap(data_folder, test_name, metrics):
         # Plot heatmap with much bigger text and numbers
         hm = sns.heatmap(data, 
                    ax=axes[idx],
-                   cmap=comfort_cmap if metric == 'Civility' else 'viridis',
+                   cmap='Blues' if metric == 'Civility' else 'Reds',
                    xticklabels=range(1, 21),
                    yticklabels=range(20, 0, -1),  # Reverse T labels
                    annot=True,  # Add numbers inside boxes
@@ -515,8 +660,6 @@ def create_test2_heatmaps(data_folder, test_name, metrics, methods):
     """Create 2x2 grid of heatmaps for Test 2"""
     test_folder = os.path.join(data_folder, test_name)
     results_folder = os.path.join(test_folder, "_Results")
-    if not os.path.exists(results_folder):
-        os.makedirs(results_folder)
     
     # Create and register the comfort colormap
     comfort_cmap = create_comfort_colormap()
@@ -553,17 +696,18 @@ def create_test2_heatmaps(data_folder, test_name, metrics, methods):
                     # Handle comma vs period in force values
                     force_str = str(force).replace('.', ',')
                     
-                    # Find matching folder by index range
-                    index_range = range(1, 82) if method == 'Helbing' else range(82, 163)
+                    # Find matching folders with this force and sigma combination
+                    pattern = f"{method}_force={force_str}_sigma={sigma}_index="
                     values = []
                     
-                    for index in index_range:
-                        folder = f"{method}_force={force_str}_sigma={sigma}_index={index}"
-                        data_path = os.path.join(test_folder, folder, 'data.csv')
-                        if os.path.exists(data_path):
-                            df, _ = load_data(data_path)
-                            if df is not None:
-                                values.append(df[metric].mean())
+                    # Look for all folders matching this pattern
+                    for folder in os.listdir(test_folder):
+                        if pattern in folder and not folder.endswith('.meta'):
+                            data_path = os.path.join(test_folder, folder, 'data.csv')
+                            if os.path.exists(data_path):
+                                df, _ = load_data(data_path)
+                                if df is not None:
+                                    values.append(df[metric].mean())
                     
                     if values:
                         data[i, j] = np.mean(values)
@@ -578,7 +722,7 @@ def create_test2_heatmaps(data_folder, test_name, metrics, methods):
             # Plot heatmap with dramatically bigger text and numbers
             hm = sns.heatmap(data, 
                        ax=ax,
-                       cmap=comfort_cmap if metric == 'Civility' else 'viridis',
+                       cmap='Blues' if metric == 'Civility' else 'Reds',
                        xticklabels=[f'{s:.1f}' for s in sigmas],
                        yticklabels=[f'{f:.1f}' for f in forces],
                        annot=True,
@@ -611,8 +755,6 @@ def create_test2_specific_screenshot_grid(data_folder, test_name):
     """Create screenshot grid with only specific Helbing combinations"""
     test_folder = os.path.join(data_folder, test_name)
     results_folder = os.path.join(test_folder, "_Results")
-    if not os.path.exists(results_folder):
-        os.makedirs(results_folder)
     
     # Specific Helbing combinations to show
     combinations = [
@@ -623,11 +765,16 @@ def create_test2_specific_screenshot_grid(data_folder, test_name):
         {'force': 3, 'sigma': 10, 'label': 'Pooling behavior\n(F=3, σ=10)'}
     ]
     
-    # Create single row layout with much larger figure
-    fig, axes = plt.subplots(1, 5, figsize=(35, 8))  # Much larger figure
+    # Create figure with space for colorbar
+    fig = plt.figure(figsize=(38, 8))
+    
+    # Create layout with screenshots and colorbar
+    gs = gridspec.GridSpec(1, 6, figure=fig, width_ratios=[1, 1, 1, 1, 1, 0.15], wspace=0.4)
     
     for idx, combo in enumerate(combinations):
-        ax = axes[idx]
+        ax = plt.Subplot(fig, gs[0, idx])
+        fig.add_subplot(ax)
+        
         force = combo['force']
         sigma = combo['sigma']
         
@@ -661,8 +808,34 @@ def create_test2_specific_screenshot_grid(data_folder, test_name):
         ax.set_xticks([])
         ax.set_yticks([])
     
-    plt.tight_layout()
-    plt.subplots_adjust(top=0.88)  # Make room for suptitle
+    # Create colorbar
+    cbar_ax = plt.Subplot(fig, gs[0, 5])
+    fig.add_subplot(cbar_ax)
+    
+    # Create comfort map colorbar based on Unity gradient
+    comfort_colors = ['red', 'yellow', 'green', 'cyan', 'blue', 'magenta', '#ff0080']  # pink
+    comfort_levels = [0, 4, 8, 12, 16, 18, 20]
+    
+    # Create a custom colormap
+    from matplotlib.colors import LinearSegmentedColormap
+    cmap = LinearSegmentedColormap.from_list('comfort', comfort_colors, N=256)
+    
+    # Create gradient data for visualization
+    gradient = np.linspace(0, 20, 256).reshape(256, 1)
+    
+    # Display the gradient
+    cbar_ax.imshow(gradient, aspect='auto', cmap=cmap, extent=[0, 1, 0, 20])
+    cbar_ax.set_xlim(0, 1)
+    cbar_ax.set_ylim(0, 20)
+    
+    # Set ticks and labels
+    cbar_ax.set_yticks(comfort_levels)
+    cbar_ax.set_yticklabels(comfort_levels, fontsize=12)
+    cbar_ax.set_xticks([])
+    cbar_ax.set_ylabel('Comfort Level', fontsize=14, rotation=270, labelpad=20)
+    cbar_ax.yaxis.set_label_position('right')
+    cbar_ax.yaxis.tick_right()
+    
     plt.savefig(os.path.join(results_folder, '2_parameter_grid_small.png'),
                 dpi=300, bbox_inches='tight')
     plt.close()
@@ -671,8 +844,6 @@ def create_test2_comprehensive_screenshot_grid(data_folder, test_name):
     """Create comprehensive screenshot grid for Test 2 with all parameter combinations"""
     test_folder = os.path.join(data_folder, test_name)
     results_folder = os.path.join(test_folder, "_Results")
-    if not os.path.exists(results_folder):
-        os.makedirs(results_folder)
     
     # Define expected parameter ranges
     param_ranges = {
@@ -812,7 +983,7 @@ def create_test2_comprehensive_screenshot_grid(data_folder, test_name):
     plt.close()
 
 def create_test2_combined_time_series(data_folder, test_name, metrics, methods):
-    """Create time series plots comparing both methods without legend"""
+    """Create time series plots comparing both methods with improved color scheme"""
     test_folder = os.path.join(data_folder, test_name)
     results_folder = os.path.join(test_folder, "_Results")
     
@@ -821,7 +992,7 @@ def create_test2_combined_time_series(data_folder, test_name, metrics, methods):
     if len(metrics) == 1:
         axes = [axes]
     
-    # Define parameter ranges for color interpolation
+    # Define parameter ranges for consistent styling
     param_ranges = {
         'Helbing': {
             'forces': [0.5, 1, 1.5, 1.75, 2, 2.5, 2.75, 3, 4],
@@ -833,9 +1004,78 @@ def create_test2_combined_time_series(data_folder, test_name, metrics, methods):
         }
     }
     
+    # Create color families for different methods using simulator color progression
+    # Helbing: Red → Yellow → Green, Vision: Cyan → Blue → Magenta → Pink
+    import matplotlib.colors as mcolors
+    
+    def create_single_color_cmap(color):
+        """Create a colormap from light to dark version of the color"""
+        return mcolors.LinearSegmentedColormap.from_list("", ["#F0F0F0", color])
+    
+    method_color_families = {
+        'Helbing': [
+            create_single_color_cmap('#FF0000'),    # Red for low forces
+            create_single_color_cmap('#FFFF00'),    # Yellow for mid forces  
+            create_single_color_cmap('#00FF00')     # Green for high forces
+        ],
+        'Vision': [
+            create_single_color_cmap('#00FFFF'),    # Cyan for low forces
+            create_single_color_cmap('#0000FF'),    # Blue for mid forces
+            create_single_color_cmap('#FF00FF'),    # Magenta for high forces
+            create_single_color_cmap('#FF0080')     # Pink for highest forces
+        ]
+    }
+    
+    # Define line styles for sigma ranges (sigma determines line style)
+    sigma_linestyles = ['-', '--', '-.', ':', (0, (3, 1, 1, 1))]  # solid, dashed, dashdot, dotted, densely dashdotdotted
+    
+    # Pre-calculate line styles for each method
+    line_styles = {}
+    
+    for method in methods:
+        force_range = param_ranges[method]['forces']
+        sigma_range = param_ranges[method]['sigmas']
+        
+        # Group forces based on available color families (3 for Helbing, 4 for Vision)
+        force_groups = len(method_color_families[method])
+        forces_per_group = len(force_range) // force_groups
+        
+        # Group sigmas into 5 ranges for line styles  
+        sigma_groups = min(5, len(sigma_range))
+        sigmas_per_group = max(1, len(sigma_range) // sigma_groups)
+        
+        for i, force in enumerate(force_range):
+            for j, sigma in enumerate(sigma_range):
+                # Determine color family based on force position
+                force_group_idx = min(force_groups - 1, i // max(1, forces_per_group))
+                color_family = method_color_families[method][force_group_idx]
+                
+                # Get color intensity within family based on force position within group
+                force_within_group = (i % max(1, forces_per_group)) / max(1, forces_per_group - 1) if forces_per_group > 1 else 0
+                color_intensity = 0.4 + force_within_group * 0.6  # 0.4 to 1.0
+                force_color = color_family(color_intensity)
+                
+                # Determine line style based on sigma position
+                sigma_group_idx = min(sigma_groups - 1, j // max(1, sigmas_per_group))
+                linestyle = sigma_linestyles[sigma_group_idx]
+                
+                # Alpha based on sigma value - higher sigma = more opaque
+                sigma_min, sigma_max = min(sigma_range), max(sigma_range)
+                if sigma_max > sigma_min:
+                    alpha = 0.3 + (sigma - sigma_min) * 0.7 / (sigma_max - sigma_min)
+                else:
+                    alpha = 0.6
+                
+                line_styles[(method, force, sigma)] = {
+                    'color': force_color,
+                    'alpha': alpha,
+                    'linestyle': linestyle
+                }
+    
     # Plot each metric
     for metric_idx, metric in enumerate(metrics):
         ax = axes[metric_idx]
+        plotted_count = 0
         
         # Plot data for each method
         for method in methods:
@@ -843,51 +1083,32 @@ def create_test2_combined_time_series(data_folder, test_name, metrics, methods):
             folders = [f for f in os.listdir(test_folder) 
                       if f.startswith(method) and not f.endswith('.meta')]
             
-            # Get parameter ranges for this method
-            force_range = param_ranges[method]['forces']
-            sigma_range = param_ranges[method]['sigmas']
-            
             # Plot each configuration
             for folder in folders:
-                result = load_data(os.path.join(test_folder, folder, "data.csv"))
-                if result:
-                    data_df, _ = result
-                    if len(data_df) >= 20:
-                        # Extract force and sigma from folder name
-                        parts = folder.split('_')
-                        try:
-                            force = next(convert_float(part.split('=')[1]) for part in parts if part.startswith('force='))
-                            sigma = next(convert_float(part.split('=')[1]) for part in parts if part.startswith('sigma='))
-                            
-                            # Calculate force color (interpolate between blue for Helbing, red for Vision)
-                            force_min = min(force_range)
-                            force_max = max(force_range)
-                            force_t = (force - force_min) / (force_max - force_min)
-                            
-                            if method == 'Helbing':
-                                force_color = np.array([0, 0, force_t])  # Blue interpolation
-                            else:
-                                force_color = np.array([force_t, 0, 0])  # Red interpolation
-                            
-                            # Calculate sigma color (interpolate on green for both)
-                            sigma_min = min(sigma_range)
-                            sigma_max = max(sigma_range)
-                            sigma_t = (sigma - sigma_min) / (sigma_max - sigma_min)
-                            sigma_color = np.array([0, sigma_t, 0])
-                            
-                            # Combine colors
-                            combined_color = force_color + sigma_color
-                            # Normalize if any component > 1
-                            max_component = max(combined_color)
-                            if max_component > 1:
-                                combined_color = combined_color / max_component
-                            
-                            ax.plot(data_df['Step'], data_df[metric],
-                                   color=combined_color, alpha=0.3, linewidth=1.5)
-                                     
-                        except Exception as e:
-                            print(f"Error processing folder {folder}: {e}")
-                            continue
+                data_path = os.path.join(test_folder, folder, "data.csv")
+                if os.path.exists(data_path):
+                    result = load_data(data_path)
+                    if result:
+                        data_df, _ = result
+                        if len(data_df) >= 20:
+                            # Extract force and sigma from folder name
+                            parts = folder.split('_')
+                            try:
+                                force = next(convert_float(part.split('=')[1]) for part in parts if part.startswith('force='))
+                                sigma = next(convert_float(part.split('=')[1]) for part in parts if part.startswith('sigma='))
+                                
+                                # Use pre-calculated line style if available
+                                style_key = (method, force, sigma)
+                                if style_key in line_styles:
+                                    ax.plot(data_df['Step'], data_df[metric],
+                                           **line_styles[style_key], linewidth=2)
+                                    plotted_count += 1
+                                         
+                            except Exception as e:
+                                print(f"Error processing folder {folder}: {e}")
+                                continue
+        
+        print(f"\nPlotted {plotted_count} lines for {metric}")
         
         ax.set_title(f'{metric} over Time', fontsize=18)
         ax.set_xlabel('Step', fontsize=16)
@@ -895,7 +1116,9 @@ def create_test2_combined_time_series(data_folder, test_name, metrics, methods):
         ax.tick_params(axis='both', which='major', labelsize=14)
         ax.grid(True)
     
-    # Remove legend - no longer needed
+    # Add a color guide as text in the corner of the first subplot
+    # Color guide removed - explanation will be in thesis text
+    
     plt.tight_layout()
     plt.savefig(os.path.join(results_folder, '2_combined_time_series.png'), 
                 dpi=300, bbox_inches='tight')
@@ -905,8 +1128,6 @@ def create_test2_similar_combinations_time_series(data_folder, test_name):
     """Create time series plots for the same combinations as the screenshots"""
     test_folder = os.path.join(data_folder, test_name)
     results_folder = os.path.join(test_folder, "_Results")
-    if not os.path.exists(results_folder):
-        os.makedirs(results_folder)
     
     # Define the combinations we want to show (same as screenshots)
     combinations = [
@@ -940,8 +1161,9 @@ def create_test2_similar_combinations_time_series(data_folder, test_name):
                 data_path = os.path.join(test_folder, folder, 'data.csv')
                 
                 if os.path.exists(data_path):
-                    data_df, _ = load_data(data_path)
-                    if data_df is not None:
+                    result = load_data(data_path)
+                    if result:
+                        data_df, _ = result
                         # Plot the line
                         ax.plot(data_df['Step'], data_df[metric],
                                label=f"{combo['method']} (f={combo['force']}, σ={combo['sigma']})",
@@ -963,8 +1185,6 @@ def create_test2_similar_combinations_screenshots(data_folder, test_name):
     """Create grid of screenshots showing time evolution for specific parameter combinations"""
     test_folder = os.path.join(data_folder, test_name)
     results_folder = os.path.join(test_folder, "_Results")
-    if not os.path.exists(results_folder):
-        os.makedirs(results_folder)
     
     combinations = [
         {'method': 'Helbing', 'force': 2, 'sigma': 7},
@@ -1052,6 +1272,10 @@ def plot_test1(data_folder):
     print("Starting 1_screenshot_grid_mini...")
     create_test1_specific_screenshot_grid(data_folder, test_name)
     print("Completed 1_screenshot_grid_mini")
+    
+    print("Starting 1_specific_cases_time_series...")
+    create_test1_specific_time_series(data_folder, test_name, metrics)
+    print("Completed 1_specific_cases_time_series")
 
 def plot_test2(data_folder):
     """Plot results for Method Parameter Comparison"""
@@ -1135,18 +1359,16 @@ def plot_test4(data_folder):
                                 method_labels=method_labels)
     print("Completed 4_screenshot_grid")
     
-    print("Starting 4_screenshot_grid_full...")
-    create_test4_full_screenshot_grid(data_folder, test_name,
-                                    methods=methods,
-                                    method_labels=method_labels)
-    print("Completed 4_screenshot_grid_full")
+    #print("Starting 4_screenshot_grid_full...")
+    #create_test4_full_screenshot_grid(data_folder, test_name,
+    #                                methods=methods,
+    #                                method_labels=method_labels)
+    #print("Completed 4_screenshot_grid_full")
 
 def create_resolution_agent_heatmap(data_folder, test_name, metrics, method, filename):
     """Create heatmap of metrics vs resolution and agent count"""
     test_folder = os.path.join(data_folder, test_name)
     results_folder = os.path.join(test_folder, "_Results")
-    if not os.path.exists(results_folder):
-        os.makedirs(results_folder)
     
     # Get all folders for this method
     folders = [f for f in os.listdir(test_folder) 
@@ -1206,16 +1428,27 @@ def create_combined_time_series_with_performance(data_folder, test_name, methods
     """Create combined time series plot with three subplots including performance"""
     test_folder = os.path.join(data_folder, test_name)
     results_folder = os.path.join(test_folder, "_Results")
-    if not os.path.exists(results_folder):
-        os.makedirs(results_folder)
     
-    fig, axes = plt.subplots(3, 1, figsize=(12, 15))
+    fig, axes = plt.subplots(3, 1, figsize=(14, 16))
     metrics = ['Efficiency', 'Civility', 'TimeForInterval']
+    metric_labels = ['Efficiency', 'Civility', 'Time per Step (ms)']
     
-    for metric_idx, metric in enumerate(metrics):
+    # Improved color scheme for Test 4
+    method_colors = [
+        '#e31a1c',  # Red for Helbing
+        '#1f78b4',  # Blue for Vision (30 pts)
+        '#33a02c',  # Green for Vision (75 pts)  
+        '#ff7f00',  # Orange for Vision (200 pts)
+        '#6a3d9a'   # Purple for Vision (1000 pts)
+    ]
+    
+    # Distinct line styles for better readability
+    linestyles = ['-', '--', '-.', ':', (0, (3, 1, 1, 1))]
+    
+    for metric_idx, (metric, metric_label) in enumerate(zip(metrics, metric_labels)):
         ax = axes[metric_idx]
         
-        for method, label in zip(methods, method_labels):
+        for method_idx, (method, label) in enumerate(zip(methods, method_labels)):
             # Get all folders for this method
             folders = [f for f in os.listdir(test_folder) 
                       if method in f and not f.endswith('.meta')]
@@ -1227,7 +1460,13 @@ def create_combined_time_series_with_performance(data_folder, test_name, methods
                 if os.path.exists(data_path):
                     df, _ = load_data(data_path)
                     if df is not None:
-                        dfs.append(df[['Step', metric]])
+                        # For TimeForInterval, multiply by 10 to get ms
+                        if metric == 'TimeForInterval':
+                            df_copy = df.copy()
+                            df_copy[metric] = df_copy[metric] * 10
+                            dfs.append(df_copy[['Step', metric]])
+                        else:
+                            dfs.append(df[['Step', metric]])
             
             if dfs:
                 # Calculate mean and std
@@ -1235,16 +1474,25 @@ def create_combined_time_series_with_performance(data_folder, test_name, methods
                 std_df = pd.concat(dfs).groupby('Step').std()
                 
                 # Plot mean line with confidence interval
-                ax.plot(mean_df.index, mean_df[metric], label=label)
+                ax.plot(mean_df.index, mean_df[metric], 
+                       label=label, 
+                       color=method_colors[method_idx],
+                       linestyle=linestyles[method_idx],
+                       linewidth=2.5,
+                       alpha=0.8)
                 ax.fill_between(mean_df.index,
                               mean_df[metric] - std_df[metric],
                               mean_df[metric] + std_df[metric],
-                              alpha=0.2)
+                              color=method_colors[method_idx],
+                              alpha=0.15)
         
-        ax.set_xlabel('Step')
-        ax.set_ylabel(metric)
-        ax.set_title(f'{metric} over Time')
-        ax.legend()
+        ax.set_xlabel('Step', fontsize=14, weight='bold')
+        ax.set_ylabel(metric_label, fontsize=14, weight='bold')
+        ax.set_title(f'{metric_label} over Time', fontsize=16, weight='bold', pad=15)
+        ax.legend(fontsize=12, frameon=True, fancybox=True, shadow=True)
+        ax.grid(True, alpha=0.3, linestyle='--')
+        ax.set_axisbelow(True)
+        ax.tick_params(axis='both', which='major', labelsize=12)
     
     plt.tight_layout()
     plt.savefig(os.path.join(results_folder, filename), 
@@ -1255,8 +1503,6 @@ def create_performance_bar_graph(data_folder, test_name, methods, method_labels,
     """Create single bar graph showing all performance data with error bars"""
     test_folder = os.path.join(data_folder, test_name)
     results_folder = os.path.join(test_folder, "_Results")
-    if not os.path.exists(results_folder):
-        os.makedirs(results_folder)
     
     all_folders = [f for f in os.listdir(test_folder) if not f.endswith('.meta')]
     resolutions = sorted(set(int(f.split('resolution=')[1].split('_')[0]) 
@@ -1271,10 +1517,16 @@ def create_performance_bar_graph(data_folder, test_name, methods, method_labels,
     bar_width = 0.15
     x = np.arange(len(combinations))
     
-    # Use distinct colors
-    colors = plt.cm.Set3(np.linspace(0, 1, len(methods)))
+    # Improved color scheme for Test 4 - distinct and professional
+    method_colors = [
+        '#e31a1c',  # Red for Helbing
+        '#1f78b4',  # Blue for Vision (30 pts)
+        '#33a02c',  # Green for Vision (75 pts)  
+        '#ff7f00',  # Orange for Vision (200 pts)
+        '#6a3d9a'   # Purple for Vision (1000 pts)
+    ]
     
-    for i, (method, label, color) in enumerate(zip(methods, method_labels, colors)):
+    for i, (method, label) in enumerate(zip(methods, method_labels)):
         means = []
         mins = []
         maxs = []
@@ -1299,17 +1551,23 @@ def create_performance_bar_graph(data_folder, test_name, methods, method_labels,
                 maxs.append(0)
         
         yerr = [np.array(means) - np.array(mins), np.array(maxs) - np.array(means)]
-        ax.bar(x + i*bar_width, means, bar_width, label=label, color=color)
-        ax.errorbar(x + i*bar_width, means, yerr=yerr, fmt='none', color='black', capsize=5)
+        bars = ax.bar(x + i*bar_width, means, bar_width, 
+                     label=label, color=method_colors[i], 
+                     alpha=0.8, edgecolor='black', linewidth=0.5)
+        ax.errorbar(x + i*bar_width, means, yerr=yerr, 
+                   fmt='none', color='black', capsize=3, capthick=1.5, alpha=0.7)
     
-    ax.set_xlabel('Resolution-Agent Count Combinations', fontsize=20)  # Bigger
-    ax.set_ylabel('Average Time per Step (ms)', fontsize=20)  # Bigger
-    ax.set_title('Performance by Resolution and Agent Count', fontsize=24)  # Bigger
+    ax.set_xlabel('Resolution-Agent Count Combinations', fontsize=20, weight='bold')
+    ax.set_ylabel('Average Time per Step (ms)', fontsize=20, weight='bold')
+    ax.set_title('Performance by Resolution and Agent Count', fontsize=24, weight='bold', pad=20)
     ax.set_xticks(x + bar_width * 2)
-    ax.set_xticklabels([f'R{res}-A{agents}' for res, agents in combinations], rotation=45, fontsize=16)  # Bigger
-    ax.tick_params(axis='both', which='major', labelsize=18)  # Bigger
-    ax.yaxis.set_major_locator(MultipleLocator(50))  # Reduce y-axis steps
-    ax.legend(fontsize=16)  # Bigger
+    ax.set_xticklabels([f'R{res}-A{agents}' for res, agents in combinations], 
+                      rotation=45, fontsize=14, ha='right')
+    ax.tick_params(axis='both', which='major', labelsize=16)
+    ax.yaxis.set_major_locator(MultipleLocator(50))
+    ax.legend(fontsize=16, loc='upper left', frameon=True, fancybox=True, shadow=True)
+    ax.grid(True, alpha=0.3, linestyle='--')
+    ax.set_axisbelow(True)
     
     plt.tight_layout()
     plt.savefig(os.path.join(results_folder, filename), dpi=300, bbox_inches='tight')
@@ -1329,10 +1587,16 @@ def create_performance_bar_graph_700(data_folder, test_name, methods, method_lab
     bar_width = 0.15
     x = np.arange(len(agent_counts))
     
-    # Use distinct colors
-    colors = plt.cm.Set3(np.linspace(0, 1, len(methods)))
+    # Improved color scheme for Test 4 - distinct and professional
+    method_colors = [
+        '#e31a1c',  # Red for Helbing
+        '#1f78b4',  # Blue for Vision (30 pts)
+        '#33a02c',  # Green for Vision (75 pts)  
+        '#ff7f00',  # Orange for Vision (200 pts)
+        '#6a3d9a'   # Purple for Vision (1000 pts)
+    ]
     
-    for i, (method, label, color) in enumerate(zip(methods, method_labels, colors)):
+    for i, (method, label) in enumerate(zip(methods, method_labels)):
         means = []
         mins = []
         maxs = []
@@ -1357,17 +1621,22 @@ def create_performance_bar_graph_700(data_folder, test_name, methods, method_lab
                 maxs.append(0)
         
         yerr = [np.array(means) - np.array(mins), np.array(maxs) - np.array(means)]
-        ax.bar(x + i*bar_width, means, bar_width, label=label, color=color)
-        ax.errorbar(x + i*bar_width, means, yerr=yerr, fmt='none', color='black', capsize=5)
+        bars = ax.bar(x + i*bar_width, means, bar_width, 
+                     label=label, color=method_colors[i], 
+                     alpha=0.8, edgecolor='black', linewidth=0.5)
+        ax.errorbar(x + i*bar_width, means, yerr=yerr, 
+                   fmt='none', color='black', capsize=3, capthick=1.5, alpha=0.7)
     
-    ax.set_xlabel('Agent Count', fontsize=20)  # Bigger
-    ax.set_ylabel('Average Time per Step (ms)', fontsize=20)  # Bigger
-    ax.set_title('Performance at Resolution 700', fontsize=24)  # Bigger
+    ax.set_xlabel('Agent Count', fontsize=20, weight='bold')
+    ax.set_ylabel('Average Time per Step (ms)', fontsize=20, weight='bold')
+    ax.set_title('Performance at Resolution 700', fontsize=24, weight='bold', pad=20)
     ax.set_xticks(x + bar_width * 2)
-    ax.set_xticklabels(agent_counts, fontsize=18)  # Bigger
-    ax.tick_params(axis='both', which='major', labelsize=18)  # Bigger
-    ax.yaxis.set_major_locator(MultipleLocator(50))  # Reduce y-axis steps
-    ax.legend(fontsize=16)  # Bigger
+    ax.set_xticklabels(agent_counts, fontsize=18)
+    ax.tick_params(axis='both', which='major', labelsize=18)
+    ax.yaxis.set_major_locator(MultipleLocator(50))
+    ax.legend(fontsize=16, loc='upper left', frameon=True, fancybox=True, shadow=True)
+    ax.grid(True, alpha=0.3, linestyle='--')
+    ax.set_axisbelow(True)
     
     plt.tight_layout()
     plt.savefig(os.path.join(results_folder, '4_performance_bars_700.png'), 
@@ -1385,9 +1654,17 @@ def create_test4_time_series_by_resolution(data_folder, test_name, methods, meth
     agent_counts = sorted(set(int(f.split('agents=')[1].split('_')[0]) 
                          for f in all_folders if 'agents=' in f))
     
-    # Create different line styles and distinct colors
-    linestyles = ['-', '--', ':', '-.', '-']
-    colors = plt.cm.Set3(np.linspace(0, 1, len(methods)))
+    # Improved color scheme and line styles for Test 4 time series
+    method_colors = [
+        '#e31a1c',  # Red for Helbing
+        '#1f78b4',  # Blue for Vision (30 pts)
+        '#33a02c',  # Green for Vision (75 pts)  
+        '#ff7f00',  # Orange for Vision (200 pts)
+        '#6a3d9a'   # Purple for Vision (1000 pts)
+    ]
+    
+    # Distinct line styles for better readability
+    linestyles = ['-', '--', '-.', ':', (0, (3, 1, 1, 1))]  # solid, dashed, dashdot, dotted, densely dashdotted
     
     # Create a separate plot for each resolution
     for resolution in resolutions:
@@ -1426,16 +1703,20 @@ def create_test4_time_series_by_resolution(data_folder, test_name, methods, meth
                     ax.plot(steps, avg_times, 
                            label=label,
                            linestyle=linestyles[method_idx],
-                           color=colors[method_idx],
-                           alpha=0.7,
-                           linewidth=2)  # Thicker lines
+                           color=method_colors[method_idx],
+                           alpha=0.8,
+                           linewidth=2.5,  # Thicker lines
+                           marker='o' if method_idx == 0 else None,  # Add markers only for Helbing
+                           markersize=4,
+                           markevery=10)  # Show every 10th marker
         
-        ax.set_xlabel('Step', fontsize=20)  # Bigger
-        ax.set_ylabel('Time per Step (ms)', fontsize=20)  # Bigger
-        ax.set_title(f'Computation Time per Step (Resolution {resolution})', fontsize=24)  # Bigger
-        ax.legend(loc='upper left', fontsize=16)  # Bigger legend
-        ax.tick_params(axis='both', which='major', labelsize=18)  # Bigger
-        ax.grid(True)
+        ax.set_xlabel('Step', fontsize=20, weight='bold')
+        ax.set_ylabel('Time per Step (ms)', fontsize=20, weight='bold')
+        ax.set_title(f'Computation Time per Step (Resolution {resolution})', fontsize=24, weight='bold', pad=20)
+        ax.legend(loc='upper left', fontsize=16, frameon=True, fancybox=True, shadow=True)
+        ax.tick_params(axis='both', which='major', labelsize=18)
+        ax.grid(True, alpha=0.3, linestyle='--')
+        ax.set_axisbelow(True)
         ax.yaxis.set_major_locator(MultipleLocator(100))  # Set y-axis ticks every 100ms
         
         plt.tight_layout()
@@ -1447,12 +1728,10 @@ def create_test4_screenshot_grid(data_folder, test_name, methods, method_labels)
     """Create grid of final screenshots for each configuration"""
     test_folder = os.path.join(data_folder, test_name)
     results_folder = os.path.join(test_folder, "_Results")
-    if not os.path.exists(results_folder):
-        os.makedirs(results_folder)
     
-    # Create a 1x5 grid (methods side by side) - much larger figure
-    fig = plt.figure(figsize=(35, 10))  # Much larger figure
-    gs = gridspec.GridSpec(1, 5, width_ratios=[1, 1, 1, 1, 1])
+    # Create a 1x6 grid (5 methods + 1 colorbar) - much larger figure
+    fig = plt.figure(figsize=(40, 10))  # Increased width for colorbar
+    gs = gridspec.GridSpec(1, 6, width_ratios=[1, 1, 1, 1, 1, 0.15], wspace=0.3)
     
     for method_idx, (method, label) in enumerate(zip(methods, method_labels)):
         # Find a folder with resolution=100 and agents=30 for this method
@@ -1497,6 +1776,24 @@ def create_test4_screenshot_grid(data_folder, test_name, methods, method_labels)
         ax.set_xticks([])
         ax.set_yticks([])
 
+    # Add comfort map colorbar on the right side
+    cbar_ax = plt.Subplot(fig, gs[5])
+    fig.add_subplot(cbar_ax)
+    
+    # Create comfort colormap (0 = red, 20 = pink)
+    comfort_colormap = create_comfort_colormap()
+    
+    # Create a gradient for the colorbar
+    gradient = np.linspace(0, 20, 256).reshape(256, 1)
+    cbar_ax.imshow(gradient, aspect='auto', cmap=comfort_colormap, extent=[0, 1, 0, 20])
+    cbar_ax.set_xlim(0, 1)
+    cbar_ax.set_ylim(0, 20)
+    cbar_ax.set_yticks([0, 4, 8, 12, 16, 20])
+    cbar_ax.set_yticklabels(['0', '4', '8', '12', '16', '20'], fontsize=20)
+    cbar_ax.set_xticks([])
+    cbar_ax.set_ylabel('Comfort Level', fontsize=24, weight='bold')
+    cbar_ax.set_title('Comfort\nMap', fontsize=22, weight='bold', pad=20)
+
     plt.tight_layout()
     plt.subplots_adjust(top=0.85)  # Make room for bigger suptitle
     plt.savefig(os.path.join(results_folder, '4_screenshot_grid.png'),
@@ -1507,8 +1804,6 @@ def create_test3_specific_screenshot_grid(data_folder, test_name):
     """Create screenshot grid for Test 3 with only force=400 sigma=12 combinations"""
     test_folder = os.path.join(data_folder, test_name)
     results_folder = os.path.join(test_folder, "_Results")
-    if not os.path.exists(results_folder):
-        os.makedirs(results_folder)
     
     # Get all folders
     all_folders = [f for f in os.listdir(test_folder) if not f.endswith('.meta')]
@@ -1602,16 +1897,21 @@ def create_test3_specific_screenshot_grid(data_folder, test_name):
     for combo in combinations:
         print(f"  FOV={combo['fov']}, Vision Length={combo['vision_length']}")
     
-    # Create grid layout - much larger figure
-    rows, cols = 2, 3
-    fig, axes = plt.subplots(rows, cols, figsize=(28, 16))  # Much larger figure
-    axes = axes.flatten()
+    # Create grid layout with space for colorbar
+    fig = plt.figure(figsize=(32, 16))
+    
+    # Create grid with space for colorbar - 2 rows, 4 columns (3 for images, 1 for colorbar)
+    gs = gridspec.GridSpec(2, 4, figure=fig, width_ratios=[1, 1, 1, 0.15], wspace=0.3, hspace=0.3)
     
     for idx, combo in enumerate(combinations):
-        if idx >= len(axes):
+        if idx >= 6:  # Limit to 6 combinations (2 rows x 3 cols)
             break
             
-        ax = axes[idx]
+        row = idx // 3
+        col = idx % 3
+        ax = plt.Subplot(fig, gs[row, col])
+        fig.add_subplot(ax)
+        
         folder = combo['folder']
         screenshot_path = os.path.join(test_folder, folder, "step_1000.png")  # Using step_1000 since simulation steps = 1000
         
@@ -1632,13 +1932,34 @@ def create_test3_specific_screenshot_grid(data_folder, test_name):
         ax.set_xticks([])
         ax.set_yticks([])
     
-    # Hide unused subplots
-    for idx in range(len(combinations), len(axes)):
-        axes[idx].set_visible(False)
-
+    # Create colorbar on the right side spanning both rows
+    cbar_ax = plt.Subplot(fig, gs[:, 3])
+    fig.add_subplot(cbar_ax)
     
-    plt.tight_layout()
-    plt.subplots_adjust(top=0.88)  # Make room for bigger suptitle
+    # Create comfort map colorbar based on Unity gradient
+    comfort_colors = ['red', 'yellow', 'green', 'cyan', 'blue', 'magenta', '#ff0080']  # pink
+    comfort_levels = [0, 4, 8, 12, 16, 18, 20]
+    
+    # Create a custom colormap
+    from matplotlib.colors import LinearSegmentedColormap
+    cmap = LinearSegmentedColormap.from_list('comfort', comfort_colors, N=256)
+    
+    # Create gradient data for visualization
+    gradient = np.linspace(0, 20, 256).reshape(256, 1)
+    
+    # Display the gradient
+    cbar_ax.imshow(gradient, aspect='auto', cmap=cmap, extent=[0, 1, 0, 20])
+    cbar_ax.set_xlim(0, 1)
+    cbar_ax.set_ylim(0, 20)
+    
+    # Set ticks and labels
+    cbar_ax.set_yticks(comfort_levels)
+    cbar_ax.set_yticklabels(comfort_levels, fontsize=12)
+    cbar_ax.set_xticks([])
+    cbar_ax.set_ylabel('Comfort Level', fontsize=14, rotation=270, labelpad=20)
+    cbar_ax.yaxis.set_label_position('right')
+    cbar_ax.yaxis.tick_right()
+    
     plt.savefig(os.path.join(results_folder, '3_vision_variations_grid.png'),
                 dpi=300, bbox_inches='tight')
     plt.close()
@@ -1665,10 +1986,16 @@ def create_performance_by_resolution(data_folder, test_name, methods, method_lab
     bar_width = 0.15
     x = np.arange(len(resolutions))
     
-    # Use distinct colors
-    colors = plt.cm.Set3(np.linspace(0, 1, len(methods)))
+    # Improved color scheme for Test 4 - distinct and professional
+    method_colors = [
+        '#e31a1c',  # Red for Helbing
+        '#1f78b4',  # Blue for Vision (30 pts)
+        '#33a02c',  # Green for Vision (75 pts)  
+        '#ff7f00',  # Orange for Vision (200 pts)
+        '#6a3d9a'   # Purple for Vision (1000 pts)
+    ]
     
-    for i, (method, label, color) in enumerate(zip(methods, method_labels, colors)):
+    for i, (method, label) in enumerate(zip(methods, method_labels)):
         means = []
         mins = []
         maxs = []
@@ -1693,17 +2020,22 @@ def create_performance_by_resolution(data_folder, test_name, methods, method_lab
                 maxs.append(0)
         
         yerr = [np.array(means) - np.array(mins), np.array(maxs) - np.array(means)]
-        ax.bar(x + i*bar_width, means, bar_width, label=label, color=color)
-        ax.errorbar(x + i*bar_width, means, yerr=yerr, fmt='none', color='black', capsize=5)
+        bars = ax.bar(x + i*bar_width, means, bar_width, 
+                     label=label, color=method_colors[i], 
+                     alpha=0.8, edgecolor='black', linewidth=0.5)
+        ax.errorbar(x + i*bar_width, means, yerr=yerr, 
+                   fmt='none', color='black', capsize=3, capthick=1.5, alpha=0.7)
     
-    ax.set_xlabel('Resolution', fontsize=20)  # Bigger
-    ax.set_ylabel('Average Time per Step (ms)', fontsize=20)  # Bigger
-    ax.set_title('Performance by Resolution', fontsize=24)  # Bigger
+    ax.set_xlabel('Resolution', fontsize=20, weight='bold')
+    ax.set_ylabel('Average Time per Step (ms)', fontsize=20, weight='bold')
+    ax.set_title('Performance by Resolution', fontsize=24, weight='bold', pad=20)
     ax.set_xticks(x + bar_width * 2)
-    ax.set_xticklabels(resolutions, fontsize=18)  # Bigger
-    ax.tick_params(axis='both', which='major', labelsize=18)  # Bigger
-    ax.yaxis.set_major_locator(MultipleLocator(50))  # Reduce y-axis steps
-    ax.legend(fontsize=16)  # Bigger
+    ax.set_xticklabels(resolutions, fontsize=18)
+    ax.tick_params(axis='both', which='major', labelsize=18)
+    ax.yaxis.set_major_locator(MultipleLocator(50))
+    ax.legend(fontsize=16, loc='upper left', frameon=True, fancybox=True, shadow=True)
+    ax.grid(True, alpha=0.3, linestyle='--')
+    ax.set_axisbelow(True)
     
     plt.tight_layout()
     plt.savefig(os.path.join(results_folder, '4_performance_by_resolution.png'), 
@@ -1714,8 +2046,6 @@ def create_test4_full_screenshot_grid(data_folder, test_name, methods, method_la
     """Create single grid of screenshots for all methods, resolutions and agent counts"""
     test_folder = os.path.join(data_folder, test_name)
     results_folder = os.path.join(test_folder, "_Results")
-    if not os.path.exists(results_folder):
-        os.makedirs(results_folder)
     
     # Get all resolutions and agent counts
     all_folders = [f for f in os.listdir(test_folder) if not f.endswith('.meta')]
@@ -1789,11 +2119,8 @@ def create_test4_full_screenshot_grid(data_folder, test_name, methods, method_la
 
 if __name__ == "__main__":
     data_folder = "../ExperimentData"
-    if not os.path.exists(data_folder):
-        print(f"Creating data folder: {os.path.abspath(data_folder)}")
-        os.makedirs(data_folder)
     
-    plot_test1(data_folder)
-    plot_test2(data_folder)
-    plot_test3(data_folder)
+    #plot_test1(data_folder)
+    #plot_test2(data_folder)
+    #plot_test3(data_folder)
     plot_test4(data_folder)
