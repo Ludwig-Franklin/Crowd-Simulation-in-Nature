@@ -1,0 +1,6 @@
+# This is a placeholder for the Helbing checkerboard explanation figure from slide 11
+# Replace this file with your actual figure showing how Helbing's method works as a checkerboard
+# The figure should illustrate:
+# - Environment as a giant checkerboard with squares
+# - Agent examining every square 
+# - Computational challenge of checking 500,000 squares for 700x700 field 
